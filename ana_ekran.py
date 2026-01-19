@@ -17,7 +17,13 @@ except ImportError:
 st.set_page_config(page_title="ROTA AI", page_icon="🚀", layout="wide")
 
 # --- 1. VERİ & API ---
-API_KEY = "AIzaSyBwTbn4D2drDRqRU1-kcyJJvHZuf4KE3gU"
+# --- 1. VERİ & API AYARI ---
+# Kodun içinden API_KEY = "..." satırını SİL ve bunu ekle:
+try:
+    API_KEY = st.secrets["GEMINI_API_KEY"]
+except:
+    API_KEY = "AIzaSy..." # Buraya istersen yedek koyabilirsin ama Secrets her zaman daha güvenlidir.
+
 genai.configure(api_key=API_KEY)
 DB_FILE = "rota_database.json"
 CONFIG_FILE = "user_config.json"
@@ -305,4 +311,5 @@ elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
 
 if st.session_state.pomo_calisiyor:
     time.sleep(1); st.rerun()
+
 
