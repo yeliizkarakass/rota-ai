@@ -18,12 +18,15 @@ st.set_page_config(page_title="ROTA AI", page_icon="🚀", layout="wide")
 
 # --- 1. VERİ & API (SECRETS KONTROLÜ) ---
 try:
+    # Streamlit Secrets üzerinden anahtarı çekiyoruz
     API_KEY = st.secrets["GEMINI_API_KEY"]
 except:
-    API_KEY = "" # Burası boş kalsa da Secrets kısmından okuyacak
+    API_KEY = "" 
 
 if API_KEY:
     genai.configure(api_key=API_KEY)
+else:
+    st.warning("⚠️ API Anahtarı bulunamadı. Lütfen Streamlit Secrets kısmına GEMINI_API_KEY ekleyin.")
 
 DB_FILE = "rota_database.json"
 CONFIG_FILE = "user_config.json"
@@ -199,38 +202,48 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
 elif menu in ["🤖 AI Mentor"]:
     st.title("🤖 AI MENTOR")
     
+    # --- 📊 HAFTALIK ANALİZ BÖLÜMÜ ---
+    st.subheader("📊 Haftalık Performans Analizi")
     with st.container(border=True):
-        st.subheader("📊 Haftalık Gelişim Raporu")
+        st.write("Verilerini analiz edip sana özel tavsiyeler oluşturmamı ister misin?")
         if st.button("HAFTAMI ANALİZ ET ✨", key="analiz_btn"):
-            with st.spinner("Veriler inceleniyor..."):
+            with st.spinner("Yapay zeka verilerini inceliyor..."):
                 try:
-                    # En kararlı model ismini kullanıyoruz
-                    model = genai.GenerativeModel('models/gemini-1.5-flash')
-                    analiz_prompt = f"Sen bir eğitim koçusun. Seviye: {u_info['egitim_duzeyi']}. Hedef: {u_info['ana_hedef']}. Veriler: {u_info['data'].to_string()}. Analiz et ve öneriler ver."
-                    report_res = model.generate_content(analiz_prompt).text
-                    st.info(report_res)
+                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    analiz_prompt = f"""
+                    Sen profesyonel bir eğitim koçusun. 
+                    Kullanıcı Seviyesi: {u_info['egitim_duzeyi']} 
+                    Ana Hedef: {u_info['ana_hedef']}
+                    Haftalık Veriler: {u_info['data'].to_string()}
+                    Lütfen başarı oranını yorumla ve 3 somut tavsiye ver.
+                    """
+                    response = model.generate_content(analiz_prompt)
+                    st.info(response.text)
                 except Exception as e:
-                    st.error("Google AI modeline şu an ulaşılamıyor. Lütfen API Key'ini kontrol et.")
+                    st.error(f"❌ Rapor oluşturulamadı. Hata: {e}")
 
     st.divider()
-    st.subheader(L["basliklar"]["mentor"])
-    chat_container = st.container(height=350)
-    with chat_container:
+
+    # --- 💬 MENTOR SOHBET BÖLÜMÜ ---
+    st.subheader("💬 Mentorla Sohbet Et")
+    chat_box = st.container(height=350)
+    with chat_box:
         if 'chat_history' not in u_info: u_info['chat_history'] = []
         for m in u_info['chat_history']:
-            with st.chat_message(m['role']): st.write(m['text'])
+            with st.chat_message(m['role']):
+                st.write(m['text'])
     
-    if chat_input_msg := st.chat_input("Mentorunla sohbet et..."):
-        u_info['chat_history'].append({"role": "user", "text": chat_input_msg})
-        with st.spinner("Yanıtlanıyor..."):
+    if p_m := st.chat_input("Sorunu buraya yaz..."):
+        u_info['chat_history'].append({"role": "user", "text": p_m})
+        with st.spinner("Mentorun düşünüyor..."):
             try:
-                model = genai.GenerativeModel('models/gemini-1.5-flash')
-                chat_res = model.generate_content(chat_input_msg).text
-                u_info['chat_history'].append({"role": "assistant", "text": chat_res})
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                res = model.generate_content(f"Bir eğitim mentoru olarak cevapla: {p_m}")
+                u_info['chat_history'].append({"role": "assistant", "text": res.text})
                 veritabanini_kaydet(st.session_state.db)
                 st.rerun()
-            except:
-                st.warning("Mesaj iletilemedi.")
+            except Exception as e:
+                st.error(f"❌ Mesaj gönderilemedi. Hata: {e}")
 
 # --- 7. ODAK (POMODORO) ---
 elif menu in ["⏱️ Odak", "⏱️ Focus"]:
@@ -255,8 +268,8 @@ elif menu in ["📅 Sınavlar", "📅 Exams"]:
     if pdf and st.button("Sınavları Çıkar"):
         reader = PyPDF2.PdfReader(pdf); text = "".join([p.extract_text() for p in reader.pages])
         try:
-            model = genai.GenerativeModel('models/gemini-1.5-flash')
-            res = model.generate_content(f"Aşağıdaki metinden sınav tarihlerini ve dersleri çıkar: {text}").text
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            res = model.generate_content(f"JSON sınav çıkar: {text}").text
             st.info(res)
         except: st.error("Hata oluştu.")
     with st.form("ms"):
@@ -294,3 +307,4 @@ elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
 
 if st.session_state.pomo_calisiyor:
     time.sleep(1); st.rerun()
+    
