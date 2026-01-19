@@ -38,24 +38,18 @@ LAKAPLAR = {
 
 DIL_PAKETI = {
     "TR": {
-        "menu": ["🏠 Panel", "📅 Sınavlar", "⏱️ Odak", "🤖 AI Mentor", "🏆 Başarılar", "⚙️ Ayarlar"],
+        "menu": ["🏠 Panel", "📅 Sınavlar", "⏱️ Odak", "🎓 Akademik", "🤖 AI Mentor", "🏆 Başarılar", "⚙️ Ayarlar"],
         "butonlar": {"baslat": "🚀 BAŞLAT", "durdur": "⏸️ DURDUR", "sifirla": "🔄 SIFIRLA", "analiz": "📊 RAPOR OLUŞTUR", "cikis": "🚪 ÇIKIŞ", "ekle": "Ekle"},
-        "basliklar": {"takip": "📝 GÜNLÜK TAKİP", "onizleme": "🗓️ Haftalık Önizleme", "mentor": "💬 MENTOR SOHBETİ", "sinavlar": "📅 SINAVLAR", "pomo": "⏱️ ODAK", "basari": "🏆 BAŞARILAR"},
+        "basliklar": {"takip": "📝 GÜNLÜK TAKİP", "onizleme": "🗓️ Haftalık Önizleme", "mentor": "💬 MENTOR SOHBETİ", "sinavlar": "📅 SINAVLAR", "pomo": "⏱️ ODAK", "basari": "🏆 BAŞARILAR", "akademik": "🎓 AKADEMİK YÖNETİM"},
         "labels": {"hedef": "Hedef", "yapilan": "Yapılan", "birim": "Birim", "gorev": "Görev", "sifre": "Şifre", "seviye": "Eğitim Düzeyi", "rutbe": "Rütbe", "xp_durum": "XP Durumu"}
     },
     "EN": {
-        "menu": ["🏠 Dashboard", "📅 Exams", "⏱️ Focus", "🤖 AI Mentor", "🏆 Achievements", "⚙️ Settings"],
+        "menu": ["🏠 Dashboard", "📅 Exams", "⏱️ Focus", "🎓 Academic", "🤖 AI Mentor", "🏆 Achievements", "⚙️ Settings"],
         "butonlar": {"baslat": "🚀 START", "durdur": "⏸️ PAUSE", "sifirla": "🔄 RESET", "analiz": "📊 CREATE REPORT", "cikis": "🚪 LOGOUT", "ekle": "Add"},
-        "basliklar": {"takip": "📝 DAILY TRACKING", "onizleme": "🗓️ Weekly Preview", "mentor": "💬 MENTOR CHAT", "sinavlar": "📅 EXAMS", "pomo": "⏱️ FOCUS", "basari": "🏆 ACHIEVEMENTS"},
+        "basliklar": {"takip": "📝 DAILY TRACKING", "onizleme": "🗓️ Weekly Preview", "mentor": "💬 MENTOR CHAT", "sinavlar": "📅 EXAMS", "pomo": "⏱️ FOCUS", "basari": "🏆 ACHIEVEMENTS", "akademik": "🎓 ACADEMIC MANAGEMENT"},
         "labels": {"hedef": "Target", "yapilan": "Done", "birim": "Unit", "gorev": "Task", "sifre": "Password", "seviye": "Education Level", "rutbe": "Rank", "xp_durum": "XP Status"}
     }
 }
-
-def mevcut_lakap_getir(lvl, dil):
-    secili_lakap = LAKAPLAR[1][dil]
-    for l in sorted(LAKAPLAR.keys()):
-        if lvl >= l: secili_lakap = LAKAPLAR[l][dil]
-    return secili_lakap
 
 def veritabanini_yukle():
     if os.path.exists(DB_FILE):
@@ -63,7 +57,7 @@ def veritabanini_yukle():
             with open(DB_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 for u in data:
-                    defaults = {'xp': 0, 'level': 1, 'ana_hedef': 'Mühendis', 'sinavlar': [], 'chat_history': [], 'notes': [], 'pomo_count': 0, 'dil': 'TR', 'habits': []}
+                    defaults = {'xp': 0, 'level': 1, 'ana_hedef': 'Mühendis', 'sinavlar': [], 'chat_history': [], 'notes': [], 'pomo_count': 0, 'dil': 'TR', 'habits': [], 'attendance': [], 'gpa_list': []}
                     for k, v in defaults.items():
                         if k not in data[u]: data[u][k] = v
                     df = pd.DataFrame(data[u]['data'])
@@ -82,7 +76,8 @@ def veritabanini_kaydet(db):
             'egitim_duzeyi': db[u].get('egitim_duzeyi', 'Üniversite'), 'dil': db[u].get('dil', 'TR'),
             'xp': db[u].get('xp', 0), 'level': db[u].get('level', 1), 'pomo_count': db[u].get('pomo_count', 0),
             'chat_history': db[u].get('chat_history', []), 'notes': db[u].get('notes', []),
-            'habits': db[u].get('habits', []), 'sinavlar': db[u].get('sinavlar', []), 
+            'habits': db[u].get('habits', []), 'attendance': db[u].get('attendance', []),
+            'gpa_list': db[u].get('gpa_list', []), 'sinavlar': db[u].get('sinavlar', []), 
             'data': db[u]['data'].to_dict(orient='records')
         }
     with open(DB_FILE, "w", encoding="utf-8") as f:
@@ -120,7 +115,7 @@ if st.session_state.get('aktif_kullanici') is None:
         if st.button("HESAP OLUŞTUR"):
             if nu and np:
                 new_df = pd.DataFrame(columns=['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan'])
-                st.session_state.db[nu] = {'password': np, 'xp': 0, 'level': 1, 'ana_hedef': 'Mühendis', 'data': new_df, 'habits': []}
+                st.session_state.db[nu] = {'password': np, 'xp': 0, 'level': 1, 'ana_hedef': 'Mühendis', 'data': new_df, 'attendance': [], 'gpa_list': []}
                 veritabanini_kaydet(st.session_state.db); st.success("Kayıt Başarılı!")
     st.stop()
 
@@ -159,10 +154,9 @@ if st.sidebar.button(L["butonlar"]["cikis"]):
 
 # --- 4. SAYFALAR ---
 
+# PANEL
 if menu in ["🏠 Panel", "🏠 Dashboard"]:
     st.title(f"✨ {u_info.get('ana_hedef', 'Mühendis').upper()} {u_id.upper()}")
-    
-    # 📊 GRAFİKLER
     if not u_info['data'].empty:
         c1, c2 = st.columns([2, 1])
         with c1:
@@ -174,7 +168,6 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
             th = u_info['data']['Hedef'].astype(float).sum()
             st.plotly_chart(go.Figure(go.Pie(labels=['Biten', 'Kalan'], values=[ty, max(0, th-ty)], hole=.6, marker_colors=['#4FACFE', '#FF4B4B'])).update_layout(height=300, showlegend=False), use_container_width=True)
 
-    # 🗓️ HAFTALIK ÖNİZLEME
     st.subheader(L["basliklar"]["onizleme"])
     gunler = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
     cols = st.columns(7)
@@ -184,7 +177,6 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
             temp_g = u_info['data'][u_info['data']['Gün'] == g]
             for _, r in temp_g.iterrows(): st.caption(f"• {r['Görev']}")
 
-    # 📝 GÖREV TAKİBİ
     st.divider(); st.subheader(L["basliklar"]["takip"])
     for g in gunler:
         with st.expander(f"📅 {g.upper()} GÖREVLERİ"):
@@ -207,31 +199,21 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
                     u_info['data'] = pd.concat([u_info['data'], pd.DataFrame([{'Gün': g, 'Görev': ng, 'Hedef': nh, 'Birim': nb, 'Yapılan': 0}])], ignore_index=True)
                     veritabanini_kaydet(st.session_state.db); st.rerun()
 
-    # ⭐ ALIŞKANLIK TAKİPÇİSİ (HATA KORUMALI)
+    # ⭐ ALIŞKANLIK TAKİPÇİSİ
     st.divider()
     st.subheader("📊 Alışkanlık Takipçisi (Habit Tracker)")
-    
-    h_data = u_info.get('habits', [])
-    h_df = pd.DataFrame(h_data, columns=["Alışkanlık", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"])
-    
-    if h_df.empty:
-        h_df = pd.DataFrame([{"Alışkanlık": "05:30 Kalkış ⏰", "Pzt": False, "Sal": False, "Çar": False, "Per": False, "Cum": False, "Cmt": False, "Paz": False}])
-    
-    e_habits = st.data_editor(h_df, num_rows="dynamic", use_container_width=True, hide_index=True, key="h_editor_final")
-    
+    h_df = pd.DataFrame(u_info.get('habits', []), columns=["Alışkanlık", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"])
+    if h_df.empty: h_df = pd.DataFrame([{"Alışkanlık": "05:30 Kalkış ⏰", "Pzt": False, "Sal": False, "Çar": False, "Per": False, "Cum": False, "Cmt": False, "Paz": False}])
+    e_habits = st.data_editor(h_df, num_rows="dynamic", use_container_width=True, hide_index=True, key="h_editor")
     if not h_df.equals(e_habits):
-        u_info['habits'] = e_habits.to_dict(orient='records')
-        veritabanini_kaydet(st.session_state.db)
-        st.rerun()
-    
+        u_info['habits'] = e_habits.to_dict(orient='records'); veritabanini_kaydet(st.session_state.db)
     for _, row in e_habits.iterrows():
-        # Hata korumalı sum işlemi (Boolean kontrolü)
         tik = sum([1 for gun in ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"] if row.get(gun, False) is True])
-        yildizlar = "⭐" * int(tik/1.4) + "▫️" * (5 - int(tik/1.4))
         c_h1, c_h2 = st.columns([3, 7])
         c_h1.caption(f"**{row['Alışkanlık']}**")
-        c_h2.progress(tik / 7, text=f"{yildizlar} %{int((tik/7)*100)}")
+        c_h2.progress(tik / 7, text=f"⭐ %{int((tik/7)*100)}")
 
+# SINAVLAR
 elif menu in ["📅 Sınavlar", "📅 Exams"]:
     st.title(L["basliklar"]["sinavlar"])
     pdf = st.file_uploader("PDF", type="pdf")
@@ -244,10 +226,10 @@ elif menu in ["📅 Sınavlar", "📅 Exams"]:
     with st.form("ex_f"):
         c1, c2 = st.columns(2); d_a = c1.text_input("Ders"); t_a = c2.date_input("Tarih")
         if st.form_submit_button("Ekle"):
-            u_info['sinavlar'].append({'ders': d_a, 'tarih': str(t_a)})
-            veritabanini_kaydet(st.session_state.db); st.rerun()
+            u_info['sinavlar'].append({'ders': d_a, 'tarih': str(t_a)}); veritabanini_kaydet(st.session_state.db); st.rerun()
     if u_info['sinavlar']: st.table(pd.DataFrame(u_info['sinavlar']))
 
+# ODAK
 elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     st.title(L["basliklar"]["pomo"])
     dk_s = st.select_slider("Dakika", options=[15, 25, 45, 60, 90], value=25)
@@ -260,6 +242,52 @@ elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     m_e, s_e = divmod(int(st.session_state.pomo_kalan_saniye), 60)
     st.markdown(f"<h1 style='text-align:center; font-size:150px; color:#4FACFE;'>{m_e:02d}:{s_e:02d}</h1>", unsafe_allow_html=True)
 
+# --- YENİ AKADEMİK SAYFASI ---
+elif menu in ["🎓 Akademik", "🎓 Academic"]:
+    st.title(L["basliklar"]["akademik"])
+    t1, t2 = st.tabs(["📉 Devamsızlık", "📊 GNO"])
+    with t1:
+        st.subheader("🗓️ Ders Katılımı")
+        with st.expander("➕ Ders Ekle"):
+            with st.form("att_f"):
+                c_n = st.text_input("Ders"); c_d = st.selectbox("Gün", ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"])
+                c_l = st.number_input("Limit", 1, 10, 4)
+                if st.form_submit_button("Ekle"):
+                    u_info['attendance'].append({"Ders": c_n, "Gün": c_d, "Limit": c_l, "Yapılan": 0})
+                    veritabanini_kaydet(st.session_state.db); st.rerun()
+        gunler_a = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]
+        cols_a = st.columns(5)
+        for i, g in enumerate(gunler_a):
+            with cols_a[i]:
+                st.markdown(f"<div style='background:#FF4B4B; color:white; text-align:center; border-radius:5px; font-weight:bold; padding:5px;'>{g[:3].upper()}</div>", unsafe_allow_html=True)
+                for idx, course in enumerate(u_info['attendance']):
+                    if course['Gün'] == g:
+                        st.write(f"**{course['Ders']}**")
+                        curr = st.number_input(f"Kaçırılan", value=course['Yapılan'], key=f"at_{idx}", min_value=0)
+                        if curr != course['Yapılan']:
+                            u_info['attendance'][idx]['Yapılan'] = curr
+                            veritabanini_kaydet(st.session_state.db); st.rerun()
+                        kalan = course['Limit'] - curr
+                        if kalan <= 1: st.error(f"Kalan: {kalan}")
+                        else: st.success(f"Kalan: {kalan}")
+    with t2:
+        st.subheader("📊 GNO Hesapla")
+        with st.form("gpa_f"):
+            g1, g2, g3 = st.columns([3, 1, 1])
+            gn = g1.text_input("Ders"); gc = g2.number_input("Kredi", 1, 10, 3)
+            gr = g3.selectbox("Not", ["AA", "BA", "BB", "CB", "CC", "DC", "DD", "FD", "FF"])
+            if st.form_submit_button("Ekle"):
+                u_info['gpa_list'].append({"ders": gn, "kredi": gc, "not": gr})
+                veritabanini_kaydet(st.session_state.db); st.rerun()
+        if u_info['gpa_list']:
+            st.table(pd.DataFrame(u_info['gpa_list']))
+            nk = {"AA": 4.0, "BA": 3.5, "BB": 3.0, "CB": 2.5, "CC": 2.0, "DC": 1.5, "DD": 1.0, "FD": 0.5, "FF": 0.0}
+            tp = sum([nk[r['not']] * r['kredi'] for r in u_info['gpa_list']])
+            tk = sum([r['kredi'] for r in u_info['gpa_list']])
+            st.metric("Tahmini GNO", f"{tp/tk:.2f}" if tk > 0 else "0.00")
+            if st.button("Temizle"): u_info['gpa_list'] = []; veritabanini_kaydet(st.session_state.db); st.rerun()
+
+# AI MENTOR
 elif menu in ["🤖 AI Mentor"]:
     st.title("🤖 AI MENTOR")
     if st.button(L["butonlar"]["analiz"]):
@@ -275,10 +303,10 @@ elif menu in ["🤖 AI Mentor"]:
             u_info['chat_history'].append({"role": "user", "text": p_m})
             try:
                 res = genai.GenerativeModel('gemini-1.5-flash').generate_content(p_m).text
-                u_info['chat_history'].append({"role": "assistant", "text": res})
-                veritabanini_kaydet(st.session_state.db); st.rerun()
+                u_info['chat_history'].append({"role": "assistant", "text": res}); veritabanini_kaydet(st.session_state.db); st.rerun()
             except: st.error("Hata!")
 
+# BAŞARILAR
 elif menu in ["🏆 Başarılar", "🏆 Achievements"]:
     st.title(L["basliklar"]["basari"])
     k1, k2, k3 = st.columns(3)
@@ -292,19 +320,18 @@ elif menu in ["🏆 Başarılar", "🏆 Achievements"]:
     if u_info['level'] >= 10: b2.success("👑 VİZYONER")
     else: b2.info("🔒 VİZYONER (Lvl 10)")
 
+# AYARLAR
 elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
     st.title(L["menu"][-1])
     with st.form("settings_f"):
         nl = st.selectbox("Dil", ["TR", "EN"], index=0 if u_info['dil'] == 'TR' else 1)
-        ni = st.text_input("Kullanıcı Adı", value=u_id)
+        ni = st.text_input("Kullanıcı", value=u_id)
         ns = st.text_input("Şifre", value=u_info['password'], type="password")
-        nm = st.text_input("Meslek / Hedef", value=u_info.get('ana_hedef', 'Mühendis'))
+        nm = st.text_input("Meslek", value=u_info.get('ana_hedef', 'Mühendis'))
         if st.form_submit_button("KAYDET"):
             if ni != u_id:
-                st.session_state.db[ni] = st.session_state.db.pop(u_id)
-                st.session_state.aktif_kullanici = ni
-            st.session_state.db[st.session_state.aktif_kullanici].update({'dil': nl, 'password': ns, 'ana_hedef': nm})
-            veritabanini_kaydet(st.session_state.db); st.rerun()
+                st.session_state.db[ni] = st.session_state.db.pop(u_id); st.session_state.aktif_kullanici = ni
+            st.session_state.db[st.session_state.aktif_kullanici].update({'dil': nl, 'password': ns, 'ana_hedef': nm}); veritabanini_kaydet(st.session_state.db); st.rerun()
 
 if st.session_state.pomo_calisiyor:
     time.sleep(1); st.rerun()
