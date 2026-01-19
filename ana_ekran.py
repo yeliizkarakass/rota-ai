@@ -63,7 +63,7 @@ def veritabanini_yukle():
             with open(DB_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 for u in data:
-                    defaults = {'xp': 0, 'level': 1, 'egitim_duzeyi': 'Üniversite', 'ana_hedef': 'Mühendis', 'sinavlar': [], 'chat_history': [], 'notes': [], 'pomo_count': 0, 'dil': 'TR', 'habits': []}
+                    defaults = {'xp': 0, 'level': 1, 'ana_hedef': 'Mühendis', 'sinavlar': [], 'chat_history': [], 'notes': [], 'pomo_count': 0, 'dil': 'TR', 'habits': []}
                     for k, v in defaults.items():
                         if k not in data[u]: data[u][k] = v
                     df = pd.DataFrame(data[u]['data'])
@@ -120,7 +120,7 @@ if st.session_state.get('aktif_kullanici') is None:
         if st.button("HESAP OLUŞTUR"):
             if nu and np:
                 new_df = pd.DataFrame(columns=['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan'])
-                st.session_state.db[nu] = {'password': np, 'xp': 0, 'level': 1, 'ana_hedef': 'Mühendis', 'data': new_df}
+                st.session_state.db[nu] = {'password': np, 'xp': 0, 'level': 1, 'ana_hedef': 'Mühendis', 'data': new_df, 'habits': []}
                 veritabanini_kaydet(st.session_state.db); st.success("Kayıt Başarılı!")
     st.stop()
 
@@ -207,21 +207,26 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
                     u_info['data'] = pd.concat([u_info['data'], pd.DataFrame([{'Gün': g, 'Görev': ng, 'Hedef': nh, 'Birim': nb, 'Yapılan': 0}])], ignore_index=True)
                     veritabanini_kaydet(st.session_state.db); st.rerun()
 
-    # ⭐ ALIŞKANLIK TAKİPÇİSİ (NEW!)
+    # ⭐ ALIŞKANLIK TAKİPÇİSİ (HATA KORUMALI)
     st.divider()
     st.subheader("📊 Alışkanlık Takipçisi (Habit Tracker)")
-    h_df = pd.DataFrame(u_info.get('habits', []), columns=["Alışkanlık", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"])
+    
+    h_data = u_info.get('habits', [])
+    h_df = pd.DataFrame(h_data, columns=["Alışkanlık", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"])
+    
     if h_df.empty:
         h_df = pd.DataFrame([{"Alışkanlık": "05:30 Kalkış ⏰", "Pzt": False, "Sal": False, "Çar": False, "Per": False, "Cum": False, "Cmt": False, "Paz": False}])
     
-    e_habits = st.data_editor(h_df, num_rows="dynamic", use_container_width=True, hide_index=True, key="h_editor")
+    e_habits = st.data_editor(h_df, num_rows="dynamic", use_container_width=True, hide_index=True, key="h_editor_final")
+    
     if not h_df.equals(e_habits):
         u_info['habits'] = e_habits.to_dict(orient='records')
         veritabanini_kaydet(st.session_state.db)
+        st.rerun()
     
-    # Yıldızlı İlerleme
     for _, row in e_habits.iterrows():
-        tik = sum([row["Pzt"], row["Sal"], row["Çar"], row["Per"], row["Cum"], row["Cmt"], row["Paz"]])
+        # Hata korumalı sum işlemi (Boolean kontrolü)
+        tik = sum([1 for gun in ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"] if row.get(gun, False) is True])
         yildizlar = "⭐" * int(tik/1.4) + "▫️" * (5 - int(tik/1.4))
         c_h1, c_h2 = st.columns([3, 7])
         c_h1.caption(f"**{row['Alışkanlık']}**")
