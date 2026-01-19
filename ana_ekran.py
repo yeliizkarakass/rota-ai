@@ -51,6 +51,14 @@ if 'pomo_kalan_saniye' not in st.session_state: st.session_state.pomo_kalan_sani
 if 'pomo_calisiyor' not in st.session_state: st.session_state.pomo_calisiyor = False
 if 'son_guncelleme' not in st.session_state: st.session_state.son_guncelleme = time.time()
 
+# API Ayarı
+try:
+    if "GEMINI_API_KEY" in st.secrets:
+        API_KEY = st.secrets["GEMINI_API_KEY"]
+        genai.configure(api_key=API_KEY)
+except:
+    API_KEY = None
+
 # --- 2. GİRİŞ KONTROLÜ ---
 if 'aktif_kullanici' not in st.session_state: st.session_state.aktif_kullanici = None
 
@@ -58,7 +66,7 @@ if st.session_state.aktif_kullanici is None:
     st.title("🚀 ROTA AI")
     t1, t2 = st.tabs(["🔑 GİRİŞ", "📝 KAYIT"])
     with t1:
-        u = st.text_input("Kullanıcı")
+        u = st.text_input("Kullanıcı Adı")
         p = st.text_input("Şifre", type="password")
         if st.button("GİRİŞ YAP"):
             if u in st.session_state.db and st.session_state.db[u]['password'] == p:
@@ -80,70 +88,69 @@ TEMA = u_info.get('tema_rengi', '#4FACFE')
 # --- 3. DİNAMİK TEMA CSS ---
 st.markdown(f"""
     <style>
-    h1, h2, h3, .stSubheader {{ color: {TEMA} !important; }}
-    div.stButton > button:first-child {{ background-color: {TEMA} !important; color: white !important; border: none; }}
+    h1, h2, h3, .stSubheader, .stMarkdown p {{ color: {TEMA} !important; }}
+    div.stButton > button:first-child {{ background-color: {TEMA} !important; color: white !important; border-radius: 8px; border: none; font-weight: bold; }}
     .stProgress > div > div > div > div {{ background-color: {TEMA} !important; }}
+    [data-testid="stExpander"] {{ border: 1px solid {TEMA}; border-radius: 10px; }}
     </style>
 """, unsafe_allow_html=True)
 
 # --- 4. SIDEBAR ---
 st.sidebar.title("🚀 ROTA AI")
-st.sidebar.color_picker("🎨 Uygulama Rengi", value=TEMA, key="color_p")
-if st.session_state.color_p != TEMA:
-    u_info['tema_rengi'] = st.session_state.color_p
+# Renk Seçici
+new_color = st.sidebar.color_picker("🎨 Tema Rengini Seç", value=TEMA)
+if new_color != TEMA:
+    u_info['tema_rengi'] = new_color
     veritabanini_kaydet(st.session_state.db); st.rerun()
 
-menu = st.sidebar.radio("NAVİGASYON", ["🏠 Panel", "📅 Sınavlar", "⏱️ Odak", "🎓 Akademik", "🏆 Başarılar", "⚙️ Ayarlar"])
+menu = st.sidebar.radio("MENÜ", ["🏠 Panel", "📅 Sınavlar", "⏱️ Odak", "🎓 Akademik", "🤖 AI Mentor", "🏆 Başarılar", "⚙️ Ayarlar"])
 
-if st.sidebar.button("🚪 ÇIKIŞ"):
+if st.sidebar.button("🚪 OTURUMU KAPAT"):
     st.session_state.aktif_kullanici = None; st.rerun()
 
 # --- 5. SAYFALAR ---
 
 if menu == "🏠 Panel":
-    st.title(f"✨ {u_info.get('ana_hedef', 'Mühendis').upper()} | {u_id.upper()}")
+    st.title(f"🚀 {u_info.get('ana_hedef', 'Mühendis').upper()} PANELİ")
     
-    # Grafik Kısmı
+    # İstatistik Grafikleri
     if not u_info['data'].empty:
         c1, c2 = st.columns([2, 1])
         with c1:
             fig = go.Figure([go.Bar(x=u_info['data']['Görev'], y=u_info['data']['Hedef'], name="Hedef", marker_color='#E9ECEF'),
                              go.Bar(x=u_info['data']['Görev'], y=u_info['data']['Yapılan'], name="Yapılan", marker_color=TEMA)])
-            fig.update_layout(height=300, barmode='group'); st.plotly_chart(fig, use_container_width=True)
+            fig.update_layout(height=300, barmode='group', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'); st.plotly_chart(fig, use_container_width=True)
         with c2:
             ty, th = u_info['data']['Yapılan'].astype(float).sum(), u_info['data']['Hedef'].astype(float).sum()
             st.plotly_chart(go.Figure(go.Pie(labels=['Biten', 'Kalan'], values=[ty, max(0, th-ty)], hole=.6, marker_colors=[TEMA, '#FF4B4B'])).update_layout(height=300, showlegend=False), use_container_width=True)
 
-    # --- ALIŞKANLIK TAKİBİ (DÜZELTİLDİ) ---
+    # ALIŞKANLIKLAR (HATA DÜZELTİLDİ)
     st.divider()
     st.subheader("📊 Alışkanlık Takipçisi")
-    
-    # Yeni Alışkanlık Ekleme Formu (Hata Çözümü)
     with st.expander("➕ Yeni Alışkanlık Ekle"):
-        with st.form("habit_form", clear_on_submit=True):
-            new_h = st.text_input("Alışkanlık İsmi (Örn: Kitap Okuma)")
-            if st.form_submit_button("Listeye Ekle"):
-                if new_h:
-                    u_info['habits'].append({"Alışkanlık": new_h, "Pzt": False, "Sal": False, "Çar": False, "Per": False, "Cum": False, "Cmt": False, "Paz": False})
+        with st.form("h_ekle_form", clear_on_submit=True):
+            h_adi = st.text_input("Alışkanlık Adı")
+            if st.form_submit_button("LİSTEYE EKLE"):
+                if h_adi:
+                    u_info['habits'].append({"Alışkanlık": h_adi, "Pzt": False, "Sal": False, "Çar": False, "Per": False, "Cum": False, "Cmt": False, "Paz": False})
                     veritabanini_kaydet(st.session_state.db); st.rerun()
 
     if u_info['habits']:
         h_df = pd.DataFrame(u_info['habits'])
-        e_habits = st.data_editor(h_df, num_rows="dynamic", use_container_width=True, hide_index=True, key="h_editor_v2")
-        
+        e_habits = st.data_editor(h_df, num_rows="dynamic", use_container_width=True, hide_index=True)
         if not h_df.equals(e_habits):
             u_info['habits'] = e_habits.to_dict(orient='records')
             veritabanini_kaydet(st.session_state.db); st.rerun()
 
-    # Günlük Görevler
-    st.divider(); st.subheader("📝 GÜNLÜK TAKİP")
+    # GÜNLÜK TAKİP
+    st.divider(); st.subheader("📝 HAFTALIK GÖREV PLANI")
     gunler = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
     for g in gunler:
         with st.expander(f"📅 {g.upper()}"):
             temp = u_info['data'][u_info['data']['Gün'] == g]
             for idx, row in temp.iterrows():
                 cc1, cc2, cc3 = st.columns([3, 2, 1])
-                cc1.write(f"**{row['Görev']}**")
+                cc1.write(f"**{row['Görev']}** ({row['Birim']})")
                 y_v = cc2.number_input("Yapılan", value=int(row['Yapılan']), key=f"v_{g}_{idx}")
                 if y_v != row['Yapılan']:
                     u_info['data'].at[idx, 'Yapılan'] = y_v; u_info['xp'] += 10
@@ -153,50 +160,65 @@ if menu == "🏠 Panel":
                     veritabanini_kaydet(st.session_state.db); st.rerun()
             with st.form(f"f_{g}", clear_on_submit=True):
                 f1, f2, f3 = st.columns([2, 1, 1])
-                ng, nh, nb = f1.text_input("Görev"), f2.number_input("Hedef", 1), f3.selectbox("Birim", ["Soru", "Saat", "Konu"])
-                if st.form_submit_button("Ekle"):
+                ng, nh, nb = f1.text_input("Görev Adı"), f2.number_input("Hedef", 1), f3.selectbox("Birim", ["Soru", "Saat", "Konu"])
+                if st.form_submit_button("Görevi Ekle"):
                     u_info['data'] = pd.concat([u_info['data'], pd.DataFrame([{'Gün': g, 'Görev': ng, 'Hedef': nh, 'Birim': nb, 'Yapılan': 0}])], ignore_index=True)
                     veritabanini_kaydet(st.session_state.db); st.rerun()
 
 elif menu == "📅 Sınavlar":
-    st.title("📅 SINAVLAR")
+    st.title("📅 SINAV TAKVİMİ")
     with st.form("ex_f", clear_on_submit=True):
-        c1, c2 = st.columns(2); d_a = c1.text_input("Ders"); t_a = c2.date_input("Tarih")
-        if st.form_submit_button("Ekle"):
+        c1, c2 = st.columns(2); d_a = c1.text_input("Ders Adı"); t_a = c2.date_input("Sınav Tarihi")
+        if st.form_submit_button("Takvime Ekle"):
             u_info['sinavlar'].append({'ders': d_a, 'tarih': str(t_a)})
             veritabanini_kaydet(st.session_state.db); st.rerun()
     for idx, ex in enumerate(u_info['sinavlar']):
-        st.info(f"📖 {ex['ders']} - 📅 {ex['tarih']}")
+        st.info(f"📖 {ex['ders']} | 📅 Tarih: {ex['tarih']}")
 
 elif menu == "⏱️ Odak":
-    st.title("⏱️ ODAK")
-    dk_s = st.select_slider("Dakika", options=[15, 25, 45, 60, 90], value=25)
-    if st.button("🚀 BAŞLAT"):
+    st.title("⏱️ POMODORO ODAK MOTORU")
+    dk_s = st.select_slider("Çalışma Süresi (Dakika)", options=[15, 25, 45, 60, 90], value=25)
+    c1, c2, c3 = st.columns(3)
+    if c1.button("🚀 BAŞLAT"):
         st.session_state.pomo_kalan_saniye = dk_s * 60; st.session_state.pomo_calisiyor = True
         st.session_state.son_guncelleme = time.time(); st.rerun()
+    if c2.button("⏸️ DURDUR"): st.session_state.pomo_calisiyor = False; st.rerun()
+    if c3.button("🔄 SIFIRLA"): st.session_state.pomo_calisiyor = False; st.session_state.pomo_kalan_saniye = 25*60; st.rerun()
+    
     m_e, s_e = divmod(int(st.session_state.pomo_kalan_saniye), 60)
-    st.markdown(f"<h1 style='text-align:center; font-size:150px; color:{TEMA};'>{m_e:02d}:{s_e:02d}</h1>", unsafe_allow_html=True)
+    st.markdown(f"<h1 style='text-align:center; font-size:120px; color:{TEMA};'>{m_e:02d}:{s_e:02d}</h1>", unsafe_allow_html=True)
+
+elif menu == "🤖 AI Mentor":
+    st.title("🤖 AI MENTOR ANALİZİ")
+    if st.button("📊 HAFTALIK RAPOR OLUŞTUR"):
+        try:
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            prompt = f"Benim verilerim: {u_info['data'].to_string()}. Bana bir arkadaş gibi tavsiyeler ver."
+            res = model.generate_content(prompt).text
+            st.info(res)
+        except: st.error("API Bağlantısı Kurulamadı.")
 
 elif menu == "🏆 Başarılar":
-    st.title("🏆 BAŞARILAR")
-    st.metric("SEVİYE", u_info['level'], f"{u_info['xp']} XP")
-    st.progress(min(u_info['xp'] / (u_info['level'] * 200), 1.0))
+    st.title("🏆 BAŞARI VE RÜTBE")
+    st.metric("GÜNCEL SEVİYE", f"Lvl {u_info['level']}", f"{u_info['xp']} Toplam XP")
+    st.progress(min(u_info['xp'] / (u_info['level'] * 500), 1.0))
+    st.caption("Bir sonraki seviye için görevleri tamamla!")
 
 elif menu == "⚙️ Ayarlar":
-    st.title("⚙️ AYARLAR")
+    st.title("⚙️ HESAP AYARLARI")
     with st.form("set_f"):
-        nm = st.text_input("Hedef/Meslek", value=u_info['ana_hedef'])
-        ns = st.text_input("Şifre", value=u_info['password'], type="password")
-        if st.form_submit_button("GÜNCELLE"):
+        nm = st.text_input("Hedef Meslek / Ünvan", value=u_info['ana_hedef'])
+        ns = st.text_input("Şifre Değiştir", value=u_info['password'], type="password")
+        if st.form_submit_button("BİLGİLERİ GÜNCELLE"):
             u_info['ana_hedef'], u_info['password'] = nm, ns
-            veritabanini_kaydet(st.session_state.db); st.success("Güncellendi!")
+            veritabanini_kaydet(st.session_state.db); st.success("Başarıyla Güncellendi!")
 
-# Sayaç Döngüsü
+# Pomodoro Arka Plan Döngüsü
 if st.session_state.pomo_calisiyor:
     simdi = time.time()
     st.session_state.pomo_kalan_saniye -= (simdi - st.session_state.son_guncelleme)
     st.session_state.son_guncelleme = simdi
     if st.session_state.pomo_kalan_saniye <= 0:
         st.session_state.pomo_calisiyor = False
-        u_info['xp'] += 50; veritabanini_kaydet(st.session_state.db); st.balloons()
+        u_info['xp'] += 100; veritabanini_kaydet(st.session_state.db); st.balloons()
     time.sleep(1); st.rerun()
