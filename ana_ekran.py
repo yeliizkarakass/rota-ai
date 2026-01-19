@@ -193,7 +193,10 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
                     if u_info['xp'] >= (u_info['level'] * 200): u_info['level'] += 1; st.balloons()
                     veritabanini_kaydet(st.session_state.db); st.rerun()
                 if cc3.button("🗑️", key=f"d_{idx}"):
-                    u_info['data'] = u_info['data'].drop(idx); veritabanini_kaydet(st.session_state.db); st.rerun()
+                    u_info['data'] = u_info['data'].drop(idx).reset_index(drop=True) # İndeksi tazeler
+                    st.session_state.db[u_id]['data'] = u_info['data'] # Session state'i günceller
+                    veritabanini_kaydet(st.session_state.db) # DOSYAYA YAZAR (En önemli adım)
+    st.rerun()
             with st.form(f"f_{g}", clear_on_submit=True):
                 f1, f2, f3 = st.columns([2, 1, 1])
                 ng, nh, nb = f1.text_input(L["labels"]["gorev"]), f2.number_input(L["labels"]["hedef"], 1), f3.selectbox(L["labels"]["birim"], ["Soru", "Saat", "Konu"])
@@ -352,3 +355,4 @@ elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
 
 if st.session_state.pomo_calisiyor:
     time.sleep(1); st.rerun()
+
