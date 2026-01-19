@@ -18,8 +18,9 @@ st.set_page_config(page_title="ROTA AI", page_icon="🚀", layout="wide")
 
 # --- 1. VERİ & API ---
 try:
-    API_KEY = st.secrets["GEMINI_API_KEY"]
-    genai.configure(api_key=API_KEY)
+    if "GEMINI_API_KEY" in st.secrets:
+        API_KEY = st.secrets["GEMINI_API_KEY"]
+        genai.configure(api_key=API_KEY)
 except:
     API_KEY = None
 
@@ -50,6 +51,12 @@ DIL_PAKETI = {
         "labels": {"hedef": "Target", "yapilan": "Done", "birim": "Unit", "gorev": "Task", "sifre": "Password", "seviye": "Education Level", "rutbe": "Rank", "xp_durum": "XP Status"}
     }
 }
+
+def mevcut_lakap_getir(lvl, dil):
+    secili_lakap = LAKAPLAR[1].get(dil, "TR")
+    for l in sorted(LAKAPLAR.keys()):
+        if lvl >= l: secili_lakap = LAKAPLAR[l].get(dil, "TR")
+    return secili_lakap
 
 def veritabanini_yukle():
     if os.path.exists(DB_FILE):
@@ -121,7 +128,7 @@ if st.session_state.get('aktif_kullanici') is None:
 
 u_id = st.session_state.aktif_kullanici
 u_info = st.session_state.db[u_id]
-L = DIL_PAKETI[u_info.get('dil', 'TR')]
+L = DIL_PAKETI.get(u_info.get('dil', 'TR'), DIL_PAKETI["TR"])
 
 # --- 3. SIDEBAR ---
 st.sidebar.title("🚀 ROTA AI")
@@ -136,7 +143,7 @@ if st.session_state.pomo_calisiyor:
 
 m_g, s_g = divmod(max(0, int(st.session_state.pomo_kalan_saniye)), 60)
 st.sidebar.markdown(f"### ⏳ Sayaç: `{m_g:02d}:{s_g:02d}`")
-st.sidebar.metric(L["labels"]["rutbe"], mevcut_lakap_getir(u_info['level'], u_info['dil']))
+st.sidebar.metric(L["labels"]["rutbe"], mevcut_lakap_getir(u_info['level'], u_info.get('dil', 'TR')))
 
 menu = st.sidebar.radio("NAVİGASYON", L["menu"])
 
@@ -220,7 +227,7 @@ elif menu in ["📅 Sınavlar", "📅 Exams"]:
     if pdf and st.button("Analiz ✨"):
         reader = PyPDF2.PdfReader(pdf); txt = "".join([p.extract_text() for p in reader.pages])
         try:
-            res = genai.GenerativeModel('gemini-1.5-flash').generate_content(f"Sınavları çıkar: {txt}").text
+            res = genai.GenerativeModel('gemini-1.5-flash').generate_content(f"Sınavları listele: {txt}").text
             st.info(res)
         except: st.error("AI Meşgul.")
     with st.form("ex_f"):
@@ -242,7 +249,7 @@ elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     m_e, s_e = divmod(int(st.session_state.pomo_kalan_saniye), 60)
     st.markdown(f"<h1 style='text-align:center; font-size:150px; color:#4FACFE;'>{m_e:02d}:{s_e:02d}</h1>", unsafe_allow_html=True)
 
-# --- YENİ AKADEMİK SAYFASI ---
+# AKADEMİK
 elif menu in ["🎓 Akademik", "🎓 Academic"]:
     st.title(L["basliklar"]["akademik"])
     t1, t2 = st.tabs(["📉 Devamsızlık", "📊 GNO"])
@@ -310,7 +317,7 @@ elif menu in ["🤖 AI Mentor"]:
 elif menu in ["🏆 Başarılar", "🏆 Achievements"]:
     st.title(L["basliklar"]["basari"])
     k1, k2, k3 = st.columns(3)
-    k1.metric("RÜTBE", mevcut_lakap_getir(u_info['level'], u_info['dil']))
+    k1.metric("RÜTBE", mevcut_lakap_getir(u_info['level'], u_info.get('dil', 'TR')))
     k2.metric("SEVİYE", u_info['level']); k3.metric("XP", u_info['xp'])
     st.progress(min(u_info['xp'] / (u_info['level'] * 200), 1.0))
     st.divider()
