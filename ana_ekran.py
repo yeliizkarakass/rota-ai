@@ -117,7 +117,7 @@ if st.session_state.get('aktif_kullanici') is None:
         if st.button("HESAP OLUŞTUR"):
             if nu and np:
                 new_df = pd.DataFrame(columns=['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan'])
-                st.session_state.db[nu] = {'password': np, 'xp': 0, 'level': 1, 'ana_hedef': 'Mühendis', 'data': new_df, 'attendance': [], 'gpa_list': []}
+                st.session_state.db[nu] = {'password': np, 'xp': 0, 'level': 1, 'ana_hedef': 'Mühendis', 'data': new_df, 'habits': [], 'attendance': [], 'gpa_list': []}
                 veritabanini_kaydet(st.session_state.db); st.success("Kayıt Başarılı!")
     st.stop()
 
@@ -156,7 +156,6 @@ if st.sidebar.button(L["butonlar"]["cikis"]):
 
 # --- 4. SAYFALAR ---
 
-# PANEL
 if menu in ["🏠 Panel", "🏠 Dashboard"]:
     st.title(f"✨ {u_info.get('ana_hedef', 'Mühendis').upper()} {u_id.upper()}")
     if not u_info['data'].empty:
@@ -186,17 +185,15 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
             for idx, row in temp.iterrows():
                 cc1, cc2, cc3 = st.columns([3, 2, 1])
                 cc1.write(f"**{row['Görev']}**")
-                y_v = cc2.number_input(L["labels"]["yapilan"], value=int(row['Yapılan']), key=f"v_{idx}")
+                y_v = cc2.number_input(L["labels"]["yapilan"], value=int(row['Yapılan']), key=f"v_{g}_{idx}")
                 if y_v != row['Yapılan']:
                     u_info['data'].at[idx, 'Yapılan'] = y_v
                     u_info['xp'] += 10
-                    if u_info['xp'] >= (u_info['level'] * 200): u_info['level'] += 1; st.balloons()
                     veritabanini_kaydet(st.session_state.db); st.rerun()
-                if cc3.button("🗑️", key=f"d_{idx}"):
-                    u_info['data'] = u_info['data'].drop(idx).reset_index(drop=True) # İndeksi tazeler
-                    st.session_state.db[u_id]['data'] = u_info['data'] # Session state'i günceller
-                    veritabanini_kaydet(st.session_state.db) # DOSYAYA YAZAR (En önemli adım)
-    st.rerun()
+                if cc3.button("🗑️", key=f"d_{g}_{idx}"):
+                    u_info['data'] = u_info['data'].drop(idx).reset_index(drop=True)
+                    veritabanini_kaydet(st.session_state.db); st.rerun()
+            
             with st.form(f"f_{g}", clear_on_submit=True):
                 f1, f2, f3 = st.columns([2, 1, 1])
                 ng, nh, nb = f1.text_input(L["labels"]["gorev"]), f2.number_input(L["labels"]["hedef"], 1), f3.selectbox(L["labels"]["birim"], ["Soru", "Saat", "Konu"])
@@ -204,7 +201,6 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
                     u_info['data'] = pd.concat([u_info['data'], pd.DataFrame([{'Gün': g, 'Görev': ng, 'Hedef': nh, 'Birim': nb, 'Yapılan': 0}])], ignore_index=True)
                     veritabanini_kaydet(st.session_state.db); st.rerun()
 
-    # ⭐ ALIŞKANLIK TAKİPÇİSİ
     st.divider()
     st.subheader("📊 Alışkanlık Takipçisi (Habit Tracker)")
     h_df = pd.DataFrame(u_info.get('habits', []), columns=["Alışkanlık", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"])
@@ -218,7 +214,6 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
         c_h1.caption(f"**{row['Alışkanlık']}**")
         c_h2.progress(tik / 7, text=f"⭐ %{int((tik/7)*100)}")
 
-# SINAVLAR
 elif menu in ["📅 Sınavlar", "📅 Exams"]:
     st.title(L["basliklar"]["sinavlar"])
     pdf = st.file_uploader("PDF", type="pdf")
@@ -235,7 +230,6 @@ elif menu in ["📅 Sınavlar", "📅 Exams"]:
             u_info['sinavlar'].append({'ders': d_a, 'tarih': str(t_a)}); veritabanini_kaydet(st.session_state.db); st.rerun()
     if u_info['sinavlar']: st.table(pd.DataFrame(u_info['sinavlar']))
 
-# ODAK
 elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     st.title(L["basliklar"]["pomo"])
     dk_s = st.select_slider("Dakika Seç", options=[15, 25, 45, 60, 90], value=25)
@@ -248,7 +242,6 @@ elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     m_e, s_e = divmod(int(st.session_state.pomo_kalan_saniye), 60)
     st.markdown(f"<h1 style='text-align:center; font-size:150px; color:#4FACFE;'>{m_e:02d}:{s_e:02d}</h1>", unsafe_allow_html=True)
 
-# AKADEMİK (SİLME ÖZELLİĞİ AKTİF)
 elif menu in ["🎓 Akademik", "🎓 Academic"]:
     st.title(L["basliklar"]["akademik"])
     t1, t2 = st.tabs(["📉 Devamsızlık", "📊 GNO"])
@@ -268,6 +261,7 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
             if st.button("🗑️ TÜMÜNÜ SİL", key="clear_all_att"):
                 u_info['attendance'] = []
                 veritabanini_kaydet(st.session_state.db); st.rerun()
+        
         st.divider()
         gunler_a = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]
         cols_a = st.columns(5)
@@ -307,7 +301,6 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
             st.metric("Tahmini GNO", f"{tp/tk:.2f}" if tk > 0 else "0.00")
             if st.button("Listeyi Temizle", key="clear_gpa"): u_info['gpa_list'] = []; veritabanini_kaydet(st.session_state.db); st.rerun()
 
-# AI MENTOR
 elif menu in ["🤖 AI Mentor"]:
     st.title("🤖 AI MENTOR")
     if st.button(L["butonlar"]["analiz"]):
@@ -326,7 +319,6 @@ elif menu in ["🤖 AI Mentor"]:
                 u_info['chat_history'].append({"role": "assistant", "text": res}); veritabanini_kaydet(st.session_state.db); st.rerun()
             except: st.error("Hata!")
 
-# BAŞARILAR
 elif menu in ["🏆 Başarılar", "🏆 Achievements"]:
     st.title(L["basliklar"]["basari"])
     k1, k2, k3 = st.columns(3)
@@ -340,7 +332,6 @@ elif menu in ["🏆 Başarılar", "🏆 Achievements"]:
     if u_info['level'] >= 10: b2.success("👑 VİZYONER")
     else: b2.info("🔒 VİZYONER (Lvl 10)")
 
-# AYARLAR
 elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
     st.title(L["menu"][-1])
     with st.form("settings_f"):
@@ -355,4 +346,3 @@ elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
 
 if st.session_state.pomo_calisiyor:
     time.sleep(1); st.rerun()
-
