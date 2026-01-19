@@ -8,12 +8,6 @@ import google.generativeai as genai
 import time
 import uuid
 
-try:
-    import PyPDF2
-except ImportError:
-    os.system('pip install PyPDF2')
-    import PyPDF2
-
 # --- 0. AYARLAR ---
 st.set_page_config(page_title="ROTA AI", page_icon="🚀", layout="wide")
 
@@ -162,6 +156,7 @@ if st.sidebar.button(L["butonlar"]["cikis"]):
 
 # --- 4. SAYFALAR ---
 
+# PANEL
 if menu in ["🏠 Panel", "🏠 Dashboard"]:
     st.title(f"✨ {u_info.get('ana_hedef', 'Mühendis').upper()} {u_id.upper()}")
     if not u_info['data'].empty:
@@ -206,6 +201,7 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
                     u_info['data'] = pd.concat([u_info['data'], pd.DataFrame([{'Gün': g, 'Görev': ng, 'Hedef': nh, 'Birim': nb, 'Yapılan': 0}])], ignore_index=True)
                     veritabanini_kaydet(st.session_state.db); st.rerun()
 
+    # ⭐ ALIŞKANLIK TAKİPÇİSİ
     st.divider()
     st.subheader("📊 Alışkanlık Takipçisi (Habit Tracker)")
     h_df = pd.DataFrame(u_info.get('habits', []), columns=["Alışkanlık", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"])
@@ -224,8 +220,9 @@ elif menu in ["📅 Sınavlar", "📅 Exams"]:
     st.title(L["basliklar"]["sinavlar"])
     pdf = st.file_uploader("PDF", type="pdf")
     if pdf and st.button("Analiz ✨"):
-        reader = PyPDF2.PdfReader(pdf); txt = "".join([p.extract_text() for p in reader.pages])
         try:
+            import PyPDF2
+            reader = PyPDF2.PdfReader(pdf); txt = "".join([p.extract_text() for p in reader.pages])
             res = genai.GenerativeModel('gemini-1.5-flash').generate_content(f"Sınavları listele: {txt}").text
             st.info(res)
         except: st.error("AI Meşgul.")
@@ -238,7 +235,7 @@ elif menu in ["📅 Sınavlar", "📅 Exams"]:
 # ODAK
 elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     st.title(L["basliklar"]["pomo"])
-    dk_s = st.select_slider("Dakika", options=[15, 25, 45, 60, 90], value=25)
+    dk_s = st.select_slider("Dakika Seç", options=[15, 25, 45, 60, 90], value=25)
     c1, c2, c3 = st.columns(3)
     if c1.button(L["butonlar"]["baslat"]): 
         st.session_state.pomo_kalan_saniye = dk_s * 60
@@ -248,7 +245,7 @@ elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     m_e, s_e = divmod(int(st.session_state.pomo_kalan_saniye), 60)
     st.markdown(f"<h1 style='text-align:center; font-size:150px; color:#4FACFE;'>{m_e:02d}:{s_e:02d}</h1>", unsafe_allow_html=True)
 
-# AKADEMİK
+# AKADEMİK (SİLME ÖZELLİĞİ AKTİF)
 elif menu in ["🎓 Akademik", "🎓 Academic"]:
     st.title(L["basliklar"]["akademik"])
     t1, t2 = st.tabs(["📉 Devamsızlık", "📊 GNO"])
@@ -268,11 +265,9 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
             if st.button("🗑️ TÜMÜNÜ SİL", key="clear_all_att"):
                 u_info['attendance'] = []
                 veritabanini_kaydet(st.session_state.db); st.rerun()
-
         st.divider()
         gunler_a = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]
         cols_a = st.columns(5)
-        
         for i, g in enumerate(gunler_a):
             with cols_a[i]:
                 st.markdown(f"<div style='background:#FF4B4B; color:white; text-align:center; border-radius:5px; font-weight:bold; padding:5px;'>{g[:3].upper()}</div>", unsafe_allow_html=True)
@@ -282,21 +277,16 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
                             st.write(f"**{course['Ders']}**")
                             c_id = course.get('id', str(uuid.uuid4()))
                             curr = st.number_input(f"Kaçırılan", value=course['Yapılan'], key=f"at_in_{c_id}", min_value=0)
-                            
                             if curr != course['Yapılan']:
                                 for idx, c_item in enumerate(u_info['attendance']):
-                                    if c_item.get('id') == c_id:
-                                        u_info['attendance'][idx]['Yapılan'] = curr
+                                    if c_item.get('id') == c_id: u_info['attendance'][idx]['Yapılan'] = curr
                                 veritabanini_kaydet(st.session_state.db); st.rerun()
-                            
                             kalan = course['Limit'] - curr
                             if kalan <= 1: st.error(f"Kalan: {kalan}")
                             else: st.success(f"Kalan: {kalan}")
-                            
                             if st.button("🗑️ Sil", key=f"btn_del_{c_id}"):
                                 u_info['attendance'] = [c for c in u_info['attendance'] if c.get('id') != c_id]
                                 veritabanini_kaydet(st.session_state.db); st.rerun()
-
     with t2:
         st.subheader("📊 GNO Hesapla")
         with st.form("gpa_f"):
