@@ -191,27 +191,62 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
 
 elif menu in ["🤖 AI Mentor"]:
     st.title("🤖 AI MENTOR")
-    with st.expander("📊 HAFTALIK GELİŞİM RAPORU", expanded=True):
-        if st.button("HAFTAMI ANALİZ ET ✨"):
-            with st.spinner("Rapor hazırlanıyor..."):
+    
+    # --- 1. BÖLÜM: HAFTALIK ANALİZ (Tamamen Bağımsız) ---
+    st.subheader("📊 Haftalık Gelişim Raporu")
+    with st.container(border=True):
+        st.write("Bu haftaki performansını yapay zeka analiz etsin.")
+        # Buton ismini ve key'ini özelleştirdik ki Chat ile karışmasın
+        if st.button("HAFTAMI ANALİZ ET ✨", key="analiz_btn"):
+            with st.spinner("Verilerin inceleniyor..."):
                 try:
-                    model = genai.GenerativeModel('gemini-1.5-flash')
-                    prompt = f"Sen bir eğitim koçusun. Seviye: {u_info['egitim_duzeyi']}. Hedef: {u_info['ana_hedef']}. Veriler: {u_info['data'].to_string()}. Bu verileri analiz et ve öneriler ver."
-                    res = model.generate_content(prompt).text
-                    st.info(res)
-                except: st.error("Model meşgul, sonra dene.")
+                    # Model adını en garantili formatta yazdık
+                    model = genai.GenerativeModel('models/gemini-1.5-flash')
+                    analiz_prompt = f"""
+                    Sen profesyonel bir eğitim koçusun.
+                    Kullanıcı Eğitim Seviyesi: {u_info['egitim_duzeyi']}
+                    Ana Hedef: {u_info['ana_hedef']}
+                    Haftalık Veriler: {u_info['data'].to_string()}
+                    
+                    Lütfen sadece bu verilere dayanarak; başarı oranını yorumla, eksik günleri belirt ve seviyeye uygun 3 tavsiye ver.
+                    DİL: {u_info['dil']}
+                    """
+                    report_res = model.generate_content(analiz_prompt).text
+                    st.markdown("### 📝 Analiz Sonucun")
+                    st.info(report_res)
+                except Exception as e:
+                    st.error("Google AI modeline şu an ulaşılamıyor. Lütfen API Key'ini kontrol et veya daha sonra tekrar dene.")
+
     st.divider()
+
+    # --- 2. BÖLÜM: MENTOR CHAT (Sadece Sohbet İçin) ---
     st.subheader(L["basliklar"]["mentor"])
-    ch = st.container(height=300)
-    with ch:
-        for m in u_info.get('chat_history', []): st.chat_message(m['role']).write(m['text'])
-    if p_m := st.chat_input("Mentorunla konuş..."):
-        u_info['chat_history'].append({"role": "user", "text": p_m})
-        try:
-            res = genai.GenerativeModel('gemini-1.5-flash').generate_content(p_m).text
-            u_info['chat_history'].append({"role": "assistant", "text": res})
-            veritabanini_kaydet(st.session_state.db); st.rerun()
-        except: st.warning("Hata!")
+    
+    # Sohbet geçmişi alanı
+    chat_container = st.container(height=350)
+    with chat_container:
+        if 'chat_history' not in u_info:
+            u_info['chat_history'] = []
+        for m in u_info['chat_history']:
+            with st.chat_message(m['role']):
+                st.write(m['text'])
+    
+    # Sohbet girişi
+    if chat_input_msg := st.chat_input("Mentorunla sohbet et..."):
+        u_info['chat_history'].append({"role": "user", "text": chat_input_msg})
+        
+        with st.spinner("Mentorun yanıtlıyor..."):
+            try:
+                # Chat için modeli tekrar çağırıyoruz (NotFound hatasına karşı garantili isim)
+                model = genai.GenerativeModel('models/gemini-1.5-flash')
+                chat_prompt = f"Sen bir eğitim mentorusun. Kullanıcı seviyesi: {u_info['egitim_duzeyi']}. Soru: {chat_input_msg}"
+                chat_res = model.generate_content(chat_prompt).text
+                
+                u_info['chat_history'].append({"role": "assistant", "text": chat_res})
+                veritabanini_kaydet(st.session_state.db)
+                st.rerun()
+            except:
+                st.warning("Mesajın iletilemedi, lütfen bağlantını kontrol et.")
 
 elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     st.title(L["basliklar"]["pomo"])
@@ -270,3 +305,4 @@ elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
 
 if st.session_state.pomo_calisiyor:
     time.sleep(1); st.rerun()
+
