@@ -214,6 +214,7 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
         c_h1.caption(f"**{row['Alışkanlık']}**")
         c_h2.progress(tik / 7, text=f"⭐ %{int((tik/7)*100)}")
 
+# SINAVLAR (GÜNCELLENMİŞ SİLME ÖZELLİKLİ)
 elif menu in ["📅 Sınavlar", "📅 Exams"]:
     st.title(L["basliklar"]["sinavlar"])
     pdf = st.file_uploader("PDF", type="pdf")
@@ -224,11 +225,25 @@ elif menu in ["📅 Sınavlar", "📅 Exams"]:
             res = genai.GenerativeModel('gemini-1.5-flash').generate_content(f"Sınavları listele: {txt}").text
             st.info(res)
         except: st.error("AI Meşgul.")
-    with st.form("ex_f"):
+    
+    with st.form("ex_f", clear_on_submit=True):
         c1, c2 = st.columns(2); d_a = c1.text_input("Ders"); t_a = c2.date_input("Tarih")
         if st.form_submit_button("Ekle"):
-            u_info['sinavlar'].append({'ders': d_a, 'tarih': str(t_a)}); veritabanini_kaydet(st.session_state.db); st.rerun()
-    if u_info['sinavlar']: st.table(pd.DataFrame(u_info['sinavlar']))
+            u_info['sinavlar'].append({'id': str(uuid.uuid4()), 'ders': d_a, 'tarih': str(t_a)})
+            veritabanini_kaydet(st.session_state.db); st.rerun()
+
+    if u_info['sinavlar']:
+        st.write("---")
+        for idx, ex in enumerate(u_info['sinavlar']):
+            # Her sınav için bir satır oluşturuyoruz
+            sc1, sc2, sc3 = st.columns([3, 2, 1])
+            sc1.write(f"📖 **{ex['ders']}**")
+            sc2.write(f"📅 {ex['tarih']}")
+            # SİLME BUTONU
+            if sc3.button("🗑️", key=f"ex_del_{idx}"):
+                u_info['sinavlar'].pop(idx)
+                veritabanini_kaydet(st.session_state.db)
+                st.rerun()
 
 elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     st.title(L["basliklar"]["pomo"])
@@ -346,3 +361,4 @@ elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
 
 if st.session_state.pomo_calisiyor:
     time.sleep(1); st.rerun()
+
