@@ -249,34 +249,49 @@ elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     m_e, s_e = divmod(int(st.session_state.pomo_kalan_saniye), 60)
     st.markdown(f"<h1 style='text-align:center; font-size:150px; color:#4FACFE;'>{m_e:02d}:{s_e:02d}</h1>", unsafe_allow_html=True)
 
-# AKADEMİK
+# --- AKADEMİK (SİLME ÖZELLİĞİ EKLENDİ) ---
 elif menu in ["🎓 Akademik", "🎓 Academic"]:
     st.title(L["basliklar"]["akademik"])
     t1, t2 = st.tabs(["📉 Devamsızlık", "📊 GNO"])
     with t1:
         st.subheader("🗓️ Ders Katılımı")
-        with st.expander("➕ Ders Ekle"):
-            with st.form("att_f"):
-                c_n = st.text_input("Ders"); c_d = st.selectbox("Gün", ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"])
-                c_l = st.number_input("Limit", 1, 10, 4)
-                if st.form_submit_button("Ekle"):
-                    u_info['attendance'].append({"Ders": c_n, "Gün": c_d, "Limit": c_l, "Yapılan": 0})
-                    veritabanini_kaydet(st.session_state.db); st.rerun()
+        
+        # ÜST KISIM: EKLEME VE TOPLU SIFIRLAMA
+        c_top1, c_top2 = st.columns([3, 1])
+        with c_top1:
+            with st.expander("➕ Yeni Ders Ekle"):
+                with st.form("att_f_new"):
+                    c_n = st.text_input("Ders"); c_d = st.selectbox("Gün", ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"])
+                    c_l = st.number_input("Limit", 1, 15, 4)
+                    if st.form_submit_button("Ekle"):
+                        u_info['attendance'].append({"Ders": c_n, "Gün": c_d, "Limit": c_l, "Yapılan": 0})
+                        veritabanini_kaydet(st.session_state.db); st.rerun()
+        with c_top2:
+            if st.button("🗑️ TÜMÜNÜ SIFIRLA"):
+                u_info['attendance'] = []
+                veritabanini_kaydet(st.session_state.db); st.rerun()
+
         gunler_a = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]
         cols_a = st.columns(5)
         for i, g in enumerate(gunler_a):
             with cols_a[i]:
                 st.markdown(f"<div style='background:#FF4B4B; color:white; text-align:center; border-radius:5px; font-weight:bold; padding:5px;'>{g[:3].upper()}</div>", unsafe_allow_html=True)
+                # Bu güne ait dersleri indeksle birlikte alıyoruz ki doğru dersi silebilelim
                 for idx, course in enumerate(u_info['attendance']):
                     if course['Gün'] == g:
-                        st.write(f"**{course['Ders']}**")
-                        curr = st.number_input(f"Kaçırılan", value=course['Yapılan'], key=f"at_{idx}", min_value=0)
-                        if curr != course['Yapılan']:
-                            u_info['attendance'][idx]['Yapılan'] = curr
-                            veritabanini_kaydet(st.session_state.db); st.rerun()
-                        kalan = course['Limit'] - curr
-                        if kalan <= 1: st.error(f"Kalan: {kalan}")
-                        else: st.success(f"Kalan: {kalan}")
+                        with st.container(border=True):
+                            st.write(f"**{course['Ders']}**")
+                            curr = st.number_input(f"Kaçırılan", value=course['Yapılan'], key=f"at_{idx}_{g}", min_value=0)
+                            if curr != course['Yapılan']:
+                                u_info['attendance'][idx]['Yapılan'] = curr
+                                veritabanini_kaydet(st.session_state.db); st.rerun()
+                            kalan = course['Limit'] - curr
+                            if kalan <= 1: st.error(f"Kalan: {kalan}")
+                            else: st.success(f"Kalan: {kalan}")
+                            # TEKİL SİLME
+                            if st.button("🗑️ Sil", key=f"del_at_{idx}"):
+                                u_info['attendance'].pop(idx)
+                                veritabanini_kaydet(st.session_state.db); st.rerun()
     with t2:
         st.subheader("📊 GNO Hesapla")
         with st.form("gpa_f"):
