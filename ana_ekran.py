@@ -202,29 +202,30 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
 elif menu in ["🤖 AI Mentor"]:
     st.title("🤖 AI MENTOR")
     
-    # --- 📊 HAFTALIK ANALİZ BÖLÜMÜ ---
+    # --- 1. BÖLÜM: HAFTALIK ANALİZ ---
     st.subheader("📊 Haftalık Performans Analizi")
     with st.container(border=True):
         st.write("Verilerini analiz edip sana özel tavsiyeler oluşturmamı ister misin?")
         if st.button("HAFTAMI ANALİZ ET ✨", key="analiz_btn"):
             with st.spinner("Yapay zeka verilerini inceliyor..."):
                 try:
+                    # HATA ÇÖZÜMÜ: Model ismini en yalın haliyle yazıyoruz
                     model = genai.GenerativeModel('gemini-1.5-flash')
-                    analiz_prompt = f"""
-                    Sen profesyonel bir eğitim koçusun. 
-                    Kullanıcı Seviyesi: {u_info['egitim_duzeyi']} 
-                    Ana Hedef: {u_info['ana_hedef']}
-                    Haftalık Veriler: {u_info['data'].to_string()}
-                    Lütfen başarı oranını yorumla ve 3 somut tavsiye ver.
-                    """
+                    analiz_prompt = f"Sen bir eğitim koçusun. Veriler: {u_info['data'].to_string()}. Başarı oranını yorumla ve 3 tavsiye ver."
                     response = model.generate_content(analiz_prompt)
                     st.info(response.text)
                 except Exception as e:
-                    st.error(f"❌ Rapor oluşturulamadı. Hata: {e}")
+                    # Eğer yukarıdaki hata verirse alternatif ismi dene
+                    try:
+                        model = genai.GenerativeModel('gemini-pro')
+                        response = model.generate_content(analiz_prompt)
+                        st.info(response.text)
+                    except:
+                        st.error(f"⚠️ Model Erişimi Başarısız. Hata Mesajı: {e}")
 
     st.divider()
 
-    # --- 💬 MENTOR SOHBET BÖLÜMÜ ---
+    # --- 2. BÖLÜM: MENTOR SOHBET BÖLÜMÜ ---
     st.subheader("💬 Mentorla Sohbet Et")
     chat_box = st.container(height=350)
     with chat_box:
@@ -237,14 +238,14 @@ elif menu in ["🤖 AI Mentor"]:
         u_info['chat_history'].append({"role": "user", "text": p_m})
         with st.spinner("Mentorun düşünüyor..."):
             try:
+                # Burada da en garantili ismi kullanıyoruz
                 model = genai.GenerativeModel('gemini-1.5-flash')
-                res = model.generate_content(f"Bir eğitim mentoru olarak cevapla: {p_m}")
+                res = model.generate_content(p_m)
                 u_info['chat_history'].append({"role": "assistant", "text": res.text})
                 veritabanini_kaydet(st.session_state.db)
                 st.rerun()
             except Exception as e:
-                st.error(f"❌ Mesaj gönderilemedi. Hata: {e}")
-
+                st.error(f"❌ Mesaj iletilemedi: {e}")
 # --- 7. ODAK (POMODORO) ---
 elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     st.title(L["basliklar"]["pomo"])
@@ -308,3 +309,4 @@ elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
 if st.session_state.pomo_calisiyor:
     time.sleep(1); st.rerun()
     
+
