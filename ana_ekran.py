@@ -16,15 +16,15 @@ except ImportError:
 # --- 0. AYARLAR ---
 st.set_page_config(page_title="ROTA AI", page_icon="🚀", layout="wide")
 
-# --- 1. VERİ & API ---
-# --- 1. VERİ & API AYARI ---
-# Kodun içinden API_KEY = "..." satırını SİL ve bunu ekle:
+# --- 1. VERİ & API (SECRETS KONTROLÜ) ---
 try:
     API_KEY = st.secrets["GEMINI_API_KEY"]
 except:
-    API_KEY = "AIzaSy..." # Buraya istersen yedek koyabilirsin ama Secrets her zaman daha güvenlidir.
+    API_KEY = "" # Burası boş kalsa da Secrets kısmından okuyacak
 
-genai.configure(api_key=API_KEY)
+if API_KEY:
+    genai.configure(api_key=API_KEY)
+
 DB_FILE = "rota_database.json"
 CONFIG_FILE = "user_config.json"
 
@@ -89,7 +89,7 @@ def veritabanini_kaydet(db):
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(to_save, f, ensure_ascii=False, indent=4)
 
-# --- 2. SİSTEM & BENİ HATIRLA ---
+# --- 2. SİSTEM MANTIĞI ---
 if 'db' not in st.session_state: st.session_state.db = veritabanini_yukle()
 if 'pomo_kalan_saniye' not in st.session_state: st.session_state.pomo_kalan_saniye = 25 * 60
 if 'pomo_calisiyor' not in st.session_state: st.session_state.pomo_calisiyor = False
@@ -153,7 +153,7 @@ if st.sidebar.button(L["butonlar"]["cikis"]):
     if os.path.exists(CONFIG_FILE): os.remove(CONFIG_FILE)
     st.session_state.aktif_kullanici = None; st.rerun()
 
-# --- 5. SAYFALAR ---
+# --- 5. PANEL ---
 if menu in ["🏠 Panel", "🏠 Dashboard"]:
     st.title(f"✨ {u_id.upper()}")
     if not u_info['data'].empty:
@@ -195,65 +195,44 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
                     u_info['data'] = pd.concat([u_info['data'], pd.DataFrame([{'Gün': g, 'Görev': ng, 'Hedef': nh, 'Birim': nb, 'Yapılan': 0}])], ignore_index=True)
                     veritabanini_kaydet(st.session_state.db); st.rerun()
 
+# --- 6. AI MENTOR ---
 elif menu in ["🤖 AI Mentor"]:
     st.title("🤖 AI MENTOR")
     
-    # --- 1. BÖLÜM: HAFTALIK ANALİZ (Tamamen Bağımsız) ---
-    st.subheader("📊 Haftalık Gelişim Raporu")
     with st.container(border=True):
-        st.write("Bu haftaki performansını yapay zeka analiz etsin.")
-        # Buton ismini ve key'ini özelleştirdik ki Chat ile karışmasın
+        st.subheader("📊 Haftalık Gelişim Raporu")
         if st.button("HAFTAMI ANALİZ ET ✨", key="analiz_btn"):
-            with st.spinner("Verilerin inceleniyor..."):
+            with st.spinner("Veriler inceleniyor..."):
                 try:
-                    # Model adını en garantili formatta yazdık
+                    # En kararlı model ismini kullanıyoruz
                     model = genai.GenerativeModel('models/gemini-1.5-flash')
-                    analiz_prompt = f"""
-                    Sen profesyonel bir eğitim koçusun.
-                    Kullanıcı Eğitim Seviyesi: {u_info['egitim_duzeyi']}
-                    Ana Hedef: {u_info['ana_hedef']}
-                    Haftalık Veriler: {u_info['data'].to_string()}
-                    
-                    Lütfen sadece bu verilere dayanarak; başarı oranını yorumla, eksik günleri belirt ve seviyeye uygun 3 tavsiye ver.
-                    DİL: {u_info['dil']}
-                    """
+                    analiz_prompt = f"Sen bir eğitim koçusun. Seviye: {u_info['egitim_duzeyi']}. Hedef: {u_info['ana_hedef']}. Veriler: {u_info['data'].to_string()}. Analiz et ve öneriler ver."
                     report_res = model.generate_content(analiz_prompt).text
-                    st.markdown("### 📝 Analiz Sonucun")
                     st.info(report_res)
                 except Exception as e:
-                    st.error("Google AI modeline şu an ulaşılamıyor. Lütfen API Key'ini kontrol et veya daha sonra tekrar dene.")
+                    st.error("Google AI modeline şu an ulaşılamıyor. Lütfen API Key'ini kontrol et.")
 
     st.divider()
-
-    # --- 2. BÖLÜM: MENTOR CHAT (Sadece Sohbet İçin) ---
     st.subheader(L["basliklar"]["mentor"])
-    
-    # Sohbet geçmişi alanı
     chat_container = st.container(height=350)
     with chat_container:
-        if 'chat_history' not in u_info:
-            u_info['chat_history'] = []
+        if 'chat_history' not in u_info: u_info['chat_history'] = []
         for m in u_info['chat_history']:
-            with st.chat_message(m['role']):
-                st.write(m['text'])
+            with st.chat_message(m['role']): st.write(m['text'])
     
-    # Sohbet girişi
     if chat_input_msg := st.chat_input("Mentorunla sohbet et..."):
         u_info['chat_history'].append({"role": "user", "text": chat_input_msg})
-        
-        with st.spinner("Mentorun yanıtlıyor..."):
+        with st.spinner("Yanıtlanıyor..."):
             try:
-                # Chat için modeli tekrar çağırıyoruz (NotFound hatasına karşı garantili isim)
                 model = genai.GenerativeModel('models/gemini-1.5-flash')
-                chat_prompt = f"Sen bir eğitim mentorusun. Kullanıcı seviyesi: {u_info['egitim_duzeyi']}. Soru: {chat_input_msg}"
-                chat_res = model.generate_content(chat_prompt).text
-                
+                chat_res = model.generate_content(chat_input_msg).text
                 u_info['chat_history'].append({"role": "assistant", "text": chat_res})
                 veritabanini_kaydet(st.session_state.db)
                 st.rerun()
             except:
-                st.warning("Mesajın iletilemedi, lütfen bağlantını kontrol et.")
+                st.warning("Mesaj iletilemedi.")
 
+# --- 7. ODAK (POMODORO) ---
 elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     st.title(L["basliklar"]["pomo"])
     if not st.session_state.pomo_calisiyor:
@@ -269,21 +248,24 @@ elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     m, s = divmod(max(0, int(st.session_state.pomo_kalan_saniye)), 60)
     st.markdown(f"<h1 style='text-align:center; font-size:100px;'>{m:02d}:{s:02d}</h1>", unsafe_allow_html=True)
 
+# --- 8. SINAVLAR ---
 elif menu in ["📅 Sınavlar", "📅 Exams"]:
     st.title(L["basliklar"]["sinavlar"])
-    pdf = st.file_uploader("PDF", type="pdf")
+    pdf = st.file_uploader("PDF Yükle", type="pdf")
     if pdf and st.button("Sınavları Çıkar"):
         reader = PyPDF2.PdfReader(pdf); text = "".join([p.extract_text() for p in reader.pages])
         try:
-            res = genai.GenerativeModel('gemini-1.5-flash').generate_content(f"JSON sınav çıkar: {text}").text
+            model = genai.GenerativeModel('models/gemini-1.5-flash')
+            res = model.generate_content(f"Aşağıdaki metinden sınav tarihlerini ve dersleri çıkar: {text}").text
             st.info(res)
-        except: st.error("Hata!")
+        except: st.error("Hata oluştu.")
     with st.form("ms"):
         c1, c2 = st.columns(2); d, t = c1.text_input("Ders"), c2.date_input("Tarih")
         if st.form_submit_button("Ekle"):
             u_info['sinavlar'].append({'ders': d, 'tarih': t.strftime("%d.%m.%Y")}); veritabanini_kaydet(st.session_state.db); st.rerun()
     for s in u_info['sinavlar']: st.warning(f"📌 {s['ders']} | {s['tarih']}")
 
+# --- 9. BAŞARILAR ---
 elif menu in ["🏆 Başarılar", "🏆 Achievements"]:
     st.title(L["basliklar"]["basari"])
     k1, k2, k3 = st.columns(3)
@@ -298,6 +280,7 @@ elif menu in ["🏆 Başarılar", "🏆 Achievements"]:
     if u_info['level'] >= 10: b2.success("👑 VİZYONER")
     else: b2.info("🔒 VİZYONER (Lvl 10)")
 
+# --- 10. AYARLAR ---
 elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
     st.title(L["menu"][-1])
     with st.form("ayarlar"):
@@ -307,9 +290,7 @@ elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
         nh = st.text_input("Ana Hedef", u_info['ana_hedef'])
         if st.form_submit_button(L["butonlar"]["guncelle"]):
             u_info['dil'], u_info['password'], u_info['egitim_duzeyi'], u_info['ana_hedef'] = nl, ns, ne, nh
-            veritabanini_kaydet(st.session_state.db); st.success("Tamam!"); st.rerun()
+            veritabanini_kaydet(st.session_state.db); st.success("Ayarlar Kaydedildi!"); st.rerun()
 
 if st.session_state.pomo_calisiyor:
     time.sleep(1); st.rerun()
-
-
