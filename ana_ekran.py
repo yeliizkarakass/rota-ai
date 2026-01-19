@@ -65,8 +65,7 @@ def veritabanini_yukle():
             with open(DB_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 for u in data:
-                    defaults = {'xp': 0, 'level': 1, 'egitim_duzeyi': 'Üniversite', 'ana_hedef': 'Gelişim',
-                                'sinavlar': [], 'chat_history': [], 'pomo_count': 0, 'dil': 'TR'}
+                    defaults = {'xp': 0, 'level': 1, 'egitim_duzeyi': 'Üniversite', 'ana_hedef': 'Gelişim', 'sinavlar': [], 'chat_history': [], 'pomo_count': 0, 'dil': 'TR', 'notes': []}
                     for k, v in defaults.items():
                         if k not in data[u]: data[u][k] = v
                     data[u]['data'] = pd.DataFrame(data[u]['data'])
@@ -146,7 +145,39 @@ tema_rengi = st.sidebar.color_picker("TEMA", "#4FACFE")
 st.markdown(f"<style>h1, h2, h3 {{ color: {tema_rengi} !important; }} div.stButton > button:first-child {{ background-color: {tema_rengi}; color: white; }}</style>", unsafe_allow_html=True)
 
 menu = st.sidebar.radio("NAVİGASYON", L["menu"])
+# --- PROFESYONEL NOTLAR ALANI ---
+    st.sidebar.divider()
+    st.sidebar.subheader("📌 Hızlı Notlar")
+    
+    # Notları DataFrame'e çevir (Düzenlenebilir olması için)
+    if 'notes' not in u_info:
+        u_info['notes'] = []
+    
+    df_notes = pd.DataFrame(u_info['notes'], columns=["Kategori", "Not"])
+    if df_notes.empty:
+        df_notes = pd.DataFrame([{"Kategori": "Genel", "Not": "İlk notunu buraya yaz..."}])
 
+    # Profesyonel Düzenleyici (Sidebar içinde)
+    edited_notes = st.sidebar.data_editor(
+        df_notes,
+        num_rows="dynamic", # Yeni satır eklemeye izin verir
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Kategori": st.column_config.SelectboxColumn(
+                "Tür",
+                options=["🔴 Acil", "🟡 Önemli", "🔵 Ders", "🟢 Kişisel"],
+                width="small"
+            ),
+            "Not": st.column_config.TextColumn("İçerik", width="medium")
+        },
+        key="sidebar_notes_editor"
+    )
+
+    # Değişiklik varsa veritabanına kaydet
+    if not df_notes.equals(edited_notes):
+        u_info['notes'] = edited_notes.to_dict(orient='records')
+        veritabanini_kaydet(st.session_state.db)
 if st.sidebar.button(L["butonlar"]["cikis"]):
     if os.path.exists(CONFIG_FILE): os.remove(CONFIG_FILE)
     st.session_state.aktif_kullanici = None; st.rerun()
@@ -299,4 +330,5 @@ elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
             veritabanini_kaydet(st.session_state.db); st.success("Tamam!"); st.rerun()
 
 if st.session_state.pomo_calisiyor: time.sleep(1); st.rerun()
+
 
