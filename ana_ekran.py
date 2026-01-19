@@ -85,13 +85,12 @@ def veritabanini_kaydet(db):
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(to_save, f, ensure_ascii=False, indent=4)
 
-# Başlangıç durumu
 if 'db' not in st.session_state: st.session_state.db = veritabanini_yukle()
 if 'pomo_kalan_saniye' not in st.session_state: st.session_state.pomo_kalan_saniye = 25 * 60
 if 'pomo_calisiyor' not in st.session_state: st.session_state.pomo_calisiyor = False
 if 'son_guncelleme' not in st.session_state: st.session_state.son_guncelleme = time.time()
 
-# --- 2. GİRİŞ & KAYIT (GÜVENLİ HALE GETİRİLDİ) ---
+# --- 2. GİRİŞ & KAYIT ---
 if 'aktif_kullanici' not in st.session_state:
     st.session_state.aktif_kullanici = None
 
@@ -105,7 +104,7 @@ if st.session_state.aktif_kullanici is None:
             if u in st.session_state.db and st.session_state.db[u]['password'] == p:
                 st.session_state.aktif_kullanici = u
                 st.rerun()
-            else: st.error("Hatalı Kullanıcı Adı veya Şifre!")
+            else: st.error("Hatalı Giriş!")
     with t2:
         nu = st.text_input("Yeni Kullanıcı Adı", key="r_u")
         np = st.text_input("Şifre Belirle", type="password", key="r_p")
@@ -114,8 +113,8 @@ if st.session_state.aktif_kullanici is None:
                 if nu not in st.session_state.db:
                     new_df = pd.DataFrame(columns=['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan'])
                     st.session_state.db[nu] = {'password': np, 'xp': 0, 'level': 1, 'ana_hedef': 'Mühendis', 'data': new_df, 'attendance': [], 'gpa_list': []}
-                    veritabanini_kaydet(st.session_state.db); st.success("Kayıt Başarılı! Şimdi giriş yapabilirsiniz.")
-                else: st.warning("Bu kullanıcı adı zaten alınmış.")
+                    veritabanini_kaydet(st.session_state.db); st.success("Kayıt Başarılı!")
+                else: st.warning("Kullanıcı mevcut.")
     st.stop()
 
 u_id = st.session_state.aktif_kullanici
@@ -198,7 +197,7 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
                     veritabanini_kaydet(st.session_state.db); st.rerun()
 
     st.divider()
-    st.subheader("📊 Alışkanlık Takipçisi (Habit Tracker)")
+    st.subheader("📊 Alışkanlık Takipçisi")
     h_df = pd.DataFrame(u_info.get('habits', []), columns=["Alışkanlık", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"])
     if h_df.empty: h_df = pd.DataFrame([{"Alışkanlık": "05:30 Kalkış ⏰", "Pzt": False, "Sal": False, "Çar": False, "Per": False, "Cum": False, "Cmt": False, "Paz": False}])
     e_habits = st.data_editor(h_df, num_rows="dynamic", use_container_width=True, hide_index=True, key="h_editor")
@@ -210,7 +209,7 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
         c_h1.caption(f"**{row['Alışkanlık']}**")
         c_h2.progress(tik / 7, text=f"⭐ %{int((tik/7)*100)}")
 
-# SINAVLAR (SİLME ÖZELLİKLİ)
+# SINAVLAR
 elif menu in ["📅 Sınavlar", "📅 Exams"]:
     st.title(L["basliklar"]["sinavlar"])
     pdf = st.file_uploader("PDF", type="pdf")
@@ -241,7 +240,7 @@ elif menu in ["📅 Sınavlar", "📅 Exams"]:
 # ODAK
 elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     st.title(L["basliklar"]["pomo"])
-    dk_s = st.select_slider("Dakika Seç", options=[15, 25, 45, 60, 90], value=25)
+    dk_s = st.select_slider("Dakika", options=[15, 25, 45, 60, 90], value=25)
     c1, c2, c3 = st.columns(3)
     if c1.button(L["butonlar"]["baslat"]): 
         st.session_state.pomo_kalan_saniye = dk_s * 60
@@ -286,7 +285,9 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
                             curr = st.number_input(f"Kaçırılan", value=course['Yapılan'], key=f"at_in_{c_id}", min_value=0)
                             if curr != course['Yapılan']:
                                 for idx, c_item in enumerate(u_info['attendance']):
-                                    if c_item.get('id') == c_id: u_item['Yapılan'] = curr
+                                    # HATA DÜZELTİLDİ: u_item -> u_info['attendance'][idx]
+                                    if c_item.get('id') == c_id: 
+                                        u_info['attendance'][idx]['Yapılan'] = curr
                                 veritabanini_kaydet(st.session_state.db); st.rerun()
                             kalan = course['Limit'] - curr
                             if kalan <= 1: st.error(f"Kalan: {kalan}")
