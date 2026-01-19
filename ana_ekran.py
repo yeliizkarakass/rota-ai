@@ -199,31 +199,49 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
 
 elif menu in ["🤖 AI Mentor"]:
     st.title("🤖 AI MENTOR & ANALİZ")
+    
+    # --- 1. HAFTALIK ANALİZ (Ana Sayfada Görünür) ---
     with st.container(border=True):
         st.subheader("📊 Haftalık Gelişim Raporu")
+        st.write("Bu haftaki verilerini yapay zeka ile analiz et.")
         if st.button(L["butonlar"]["analiz"]):
-            with st.spinner("Analiz ediliyor..."):
+            with st.spinner("Verilerin inceleniyor..."):
                 try:
-                    model = genai.GenerativeModel('gemini-1.5-flash-latest')
-                    kişiselleştirilmiş_komut = f"Sen bir mentorsun. Seviye: {u_info['egitim_duzeyi']}, Hedef: {u_info['ana_hedef']}. Veriler: {u_info['data'].to_string()}. Seviyesine uygun analiz yap."
-                    res = model.generate_content(kişiselleştirilmiş_komut).text
-                    st.markdown(res)
-                except: st.error("AI Meşgul.")
+                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    prompt = f"Sen bir mentorsun. Seviye: {u_info['egitim_duzeyi']}, Hedef: {u_info['ana_hedef']}. Veriler: {u_info['data'].to_string()}. Başarıyı yorumla ve 3 tavsiye ver."
+                    res = model.generate_content(prompt).text
+                    st.info(res)
+                except: st.error("AI şu an meşgul.")
 
-    st.divider(); st.subheader(L["basliklar"]["mentor"])
-    # --- GERİ GELEN SOHBET KODLARI ---
-    ch = st.container(height=350)
-    for m in u_info.get('chat_history', []):
-        ch.chat_message(m['role']).write(m['text'])
+    st.divider()
+
+    # --- 2. MENTOR SOHBETİ (TIKLAYINCA AÇILAN KISIM) ---
+    st.subheader("💬 Mentor Desteği")
     
-    p_m = st.chat_input("Mentorunla konuş...")
-    if p_m:
-        u_info['chat_history'].append({"role": "user", "text": p_m})
-        try:
-            res = genai.GenerativeModel('gemini-1.5-flash-latest').generate_content(p_m).text
-            u_info['chat_history'].append({"role": "assistant", "text": res})
-            veritabanini_kaydet(st.session_state.db); st.rerun()
-        except: st.warning("Hata!")
+    # İşte istediğin o "tıklayınca açılan" sihirli buton
+    with st.popover("🤖 MENTOR İLE SOHBETİ BAŞLAT"):
+        st.write("Mentoruna derslerin veya hedeflerin hakkında soru sorabilirsin.")
+        
+        # Sohbet geçmişini bu küçük pencerenin içinde gösteriyoruz
+        chat_sub_container = st.container(height=400)
+        with chat_sub_container:
+            if 'chat_history' not in u_info:
+                u_info['chat_history'] = []
+            for m in u_info['chat_history']:
+                st.chat_message(m['role']).write(m['text'])
+        
+        # Mesaj girişi de pencerenin içinde
+        p_m = st.chat_input("Buraya yaz...", key="popover_chat_input")
+        if p_m:
+            u_info['chat_history'].append({"role": "user", "text": p_m})
+            try:
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                res = model.generate_content(p_m).text
+                u_info['chat_history'].append({"role": "assistant", "text": res})
+                veritabanini_kaydet(st.session_state.db)
+                st.rerun()
+            except:
+                st.warning("Mesaj iletilemedi.")
 
 elif menu in ["📅 Sınavlar", "📅 Exams"]:
     st.title(L["basliklar"]["sinavlar"])
@@ -281,3 +299,4 @@ elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
             veritabanini_kaydet(st.session_state.db); st.success("Tamam!"); st.rerun()
 
 if st.session_state.pomo_calisiyor: time.sleep(1); st.rerun()
+
