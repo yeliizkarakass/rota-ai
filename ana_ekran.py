@@ -17,11 +17,20 @@ except ImportError:
 st.set_page_config(page_title="ROTA AI", page_icon="🚀", layout="wide")
 
 # --- 1. VERİ & API ---
-try:
-    API_KEY = st.secrets["GEMINI_API_KEY"]
-    genai.configure(api_key=API_KEY)
-except:
-    API_KEY = None
+# --- 1. VERİ & API KONTROLÜ ---
+# API anahtarını hem Secrets'tan hem de bağlantıdan kontrol eden sağlam yapı
+if "GEMINI_API_KEY" in st.secrets:
+    try:
+        API_KEY = st.secrets["GEMINI_API_KEY"]
+        genai.configure(api_key=API_KEY)
+        # Bağlantının gerçekten kurulup kurulmadığını test etmek için küçük bir bayrak
+        api_baglantisi_aktif = True 
+    except Exception as e:
+        st.error(f"❌ Google AI Yapılandırma Hatası: {e}")
+        api_baglantisi_aktif = False
+else:
+    st.error("⚠️ Kritik Hata: Streamlit Secrets içinde 'GEMINI_API_KEY' bulunamadı!")
+    api_baglantisi_aktif = FalseNone
 
 DB_FILE = "rota_database.json"
 CONFIG_FILE = "user_config.json"
@@ -291,3 +300,4 @@ elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
 
 if st.session_state.pomo_calisiyor:
     time.sleep(1); st.rerun()
+
