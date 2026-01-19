@@ -162,7 +162,6 @@ if st.sidebar.button(L["butonlar"]["cikis"]):
 
 # --- 4. SAYFALAR ---
 
-# PANEL
 if menu in ["🏠 Panel", "🏠 Dashboard"]:
     st.title(f"✨ {u_info.get('ana_hedef', 'Mühendis').upper()} {u_id.upper()}")
     if not u_info['data'].empty:
@@ -249,14 +248,12 @@ elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     m_e, s_e = divmod(int(st.session_state.pomo_kalan_saniye), 60)
     st.markdown(f"<h1 style='text-align:center; font-size:150px; color:#4FACFE;'>{m_e:02d}:{s_e:02d}</h1>", unsafe_allow_html=True)
 
-# --- AKADEMİK (SİLME MANTIĞI YENİLENDİ) ---
+# AKADEMİK
 elif menu in ["🎓 Akademik", "🎓 Academic"]:
     st.title(L["basliklar"]["akademik"])
     t1, t2 = st.tabs(["📉 Devamsızlık", "📊 GNO"])
     with t1:
         st.subheader("🗓️ Ders Katılımı")
-        
-        # ÜST KONTROLLER
         c_top1, c_top2 = st.columns([3, 1])
         with c_top1:
             with st.expander("➕ Yeni Ders Ekle"):
@@ -265,11 +262,10 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
                     c_d = st.selectbox("Gün", ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"])
                     c_l = st.number_input("Limit", 1, 15, 4)
                     if st.form_submit_button("Ekle"):
-                        # Her derse benzersiz bir ID veriyoruz
                         u_info['attendance'].append({"id": str(uuid.uuid4()), "Ders": c_n, "Gün": c_d, "Limit": c_l, "Yapılan": 0})
                         veritabanini_kaydet(st.session_state.db); st.rerun()
         with c_top2:
-            if st.button("🗑️ TÜMÜNÜ SİL"):
+            if st.button("🗑️ TÜMÜNÜ SİL", key="clear_all_att"):
                 u_info['attendance'] = []
                 veritabanini_kaydet(st.session_state.db); st.rerun()
 
@@ -277,24 +273,19 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
         gunler_a = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]
         cols_a = st.columns(5)
         
-        # Dersleri güvenli bir şekilde listeleme ve silme
         for i, g in enumerate(gunler_a):
             with cols_a[i]:
                 st.markdown(f"<div style='background:#FF4B4B; color:white; text-align:center; border-radius:5px; font-weight:bold; padding:5px;'>{g[:3].upper()}</div>", unsafe_allow_html=True)
-                
-                # Bu güne ait dersleri bul
-                for course in list(u_info['attendance']): # Liste kopyası üzerinden dönüyoruz
+                for course in list(u_info['attendance']):
                     if course.get('Gün') == g:
                         with st.container(border=True):
                             st.write(f"**{course['Ders']}**")
-                            
-                            # ID bazlı key yönetimi
-                            c_id = course.get('id', course['Ders']) 
+                            c_id = course.get('id', str(uuid.uuid4()))
                             curr = st.number_input(f"Kaçırılan", value=course['Yapılan'], key=f"at_in_{c_id}", min_value=0)
                             
                             if curr != course['Yapılan']:
                                 for idx, c_item in enumerate(u_info['attendance']):
-                                    if c_item.get('id') == c_id or c_item['Ders'] == course['Ders']:
+                                    if c_item.get('id') == c_id:
                                         u_info['attendance'][idx]['Yapılan'] = curr
                                 veritabanini_kaydet(st.session_state.db); st.rerun()
                             
@@ -302,9 +293,8 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
                             if kalan <= 1: st.error(f"Kalan: {kalan}")
                             else: st.success(f"Kalan: {kalan}")
                             
-                            # KESİN ÇÖZÜM: SİLME BUTONU
                             if st.button("🗑️ Sil", key=f"btn_del_{c_id}"):
-                                u_info['attendance'] = [c for c in u_info['attendance'] if c.get('id') != c_id and c['Ders'] != course['Ders']]
+                                u_info['attendance'] = [c for c in u_info['attendance'] if c.get('id') != c_id]
                                 veritabanini_kaydet(st.session_state.db); st.rerun()
 
     with t2:
@@ -322,7 +312,7 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
             tp = sum([nk[r['not']] * r['kredi'] for r in u_info['gpa_list']])
             tk = sum([r['kredi'] for r in u_info['gpa_list']])
             st.metric("Tahmini GNO", f"{tp/tk:.2f}" if tk > 0 else "0.00")
-            if st.button("Listeyi Temizle"): u_info['gpa_list'] = []; veritabanini_kaydet(st.session_state.db); st.rerun()
+            if st.button("Listeyi Temizle", key="clear_gpa"): u_info['gpa_list'] = []; veritabanini_kaydet(st.session_state.db); st.rerun()
 
 # AI MENTOR
 elif menu in ["🤖 AI Mentor"]:
