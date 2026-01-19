@@ -63,8 +63,8 @@ def veritabanini_yukle():
                     for k, v in defaults.items():
                         if k not in data[u]: data[u][k] = v
                     df = pd.DataFrame(data[u]['data'])
-                    if 'Yapılan' not in df.columns: df['Yapılan'] = 0
-                    if 'Gün' not in df.columns: df['Gün'] = ""
+                    for col in ['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan']:
+                        if col not in df.columns: df[col] = 0 if col == 'Yapılan' else ""
                     data[u]['data'] = df
                 return data
         except: return {}
@@ -83,13 +83,12 @@ def veritabanini_kaydet(db):
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(to_save, f, ensure_ascii=False, indent=4)
 
-# --- 2. SİSTEM & POMODORO MANTIĞI ---
+# --- 2. SİSTEM & BENİ HATIRLA ---
 if 'db' not in st.session_state: st.session_state.db = veritabanini_yukle()
 if 'pomo_kalan_saniye' not in st.session_state: st.session_state.pomo_kalan_saniye = 25 * 60
 if 'pomo_calisiyor' not in st.session_state: st.session_state.pomo_calisiyor = False
 if 'son_guncelleme' not in st.session_state: st.session_state.son_guncelleme = time.time()
 
-# BENİ HATIRLA KONTROLÜ
 if 'aktif_kullanici' not in st.session_state:
     if os.path.exists(CONFIG_FILE):
         try:
@@ -110,18 +109,18 @@ if st.session_state.pomo_calisiyor:
             st.session_state.db[u]['xp'] += 30; st.session_state.db[u]['pomo_count'] += 1
             veritabanini_kaydet(st.session_state.db); st.balloons()
 
-# --- 3. GİRİŞ EKRANI ---
+# --- 3. GİRİŞ / KAYIT ---
 if 'aktif_kullanici' not in st.session_state or st.session_state.aktif_kullanici is None:
     st.title("🚀 ROTA AI")
     t1, t2 = st.tabs(["🔑 GİRİŞ", "📝 KAYIT"])
     with t1:
         u = st.text_input("Kullanıcı", key="l_u")
         p = st.text_input("Şifre", type="password", key="l_p")
-        beni_hatirla = st.checkbox("Beni Hatırla")
+        hatirla = st.checkbox("Beni Hatırla")
         if st.button("GİRİŞ YAP"):
             if u in st.session_state.db and st.session_state.db[u]['password'] == p:
                 st.session_state.aktif_kullanici = u
-                if beni_hatirla:
+                if hatirla:
                     with open(CONFIG_FILE, "w") as f: json.dump({'user': u}, f)
                 st.rerun()
             else: st.error("Hatalı!")
@@ -148,7 +147,7 @@ if st.sidebar.button(L["butonlar"]["cikis"]):
     if os.path.exists(CONFIG_FILE): os.remove(CONFIG_FILE)
     st.session_state.aktif_kullanici = None; st.rerun()
 
-# --- 5. PANEL ---
+# --- 5. SAYFALAR ---
 if menu in ["🏠 Panel", "🏠 Dashboard"]:
     st.title(f"✨ {u_id.upper()}")
     if not u_info['data'].empty:
@@ -190,56 +189,52 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
                     u_info['data'] = pd.concat([u_info['data'], pd.DataFrame([{'Gün': g, 'Görev': ng, 'Hedef': nh, 'Birim': nb, 'Yapılan': 0}])], ignore_index=True)
                     veritabanini_kaydet(st.session_state.db); st.rerun()
 
-# --- 6. AI MENTOR ---
 elif menu in ["🤖 AI Mentor"]:
     st.title("🤖 AI MENTOR")
-    if st.button(L["butonlar"]["analiz"]):
-        with st.spinner("Analiz ediliyor..."):
-            res = genai.GenerativeModel('gemini-1.5-flash-latest').generate_content(f"Sen bir mentorsun. Seviye: {u_info['egitim_duzeyi']}. Hedef: {u_info['ana_hedef']}. Veriler: {u_info['data'].to_string()}").text
-            st.info(res)
+    with st.expander("📊 HAFTALIK GELİŞİM RAPORU", expanded=True):
+        if st.button("HAFTAMI ANALİZ ET ✨"):
+            with st.spinner("Rapor hazırlanıyor..."):
+                try:
+                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    prompt = f"Sen bir eğitim koçusun. Seviye: {u_info['egitim_duzeyi']}. Hedef: {u_info['ana_hedef']}. Veriler: {u_info['data'].to_string()}. Bu verileri analiz et ve öneriler ver."
+                    res = model.generate_content(prompt).text
+                    st.info(res)
+                except: st.error("Model meşgul, sonra dene.")
     st.divider()
+    st.subheader(L["basliklar"]["mentor"])
     ch = st.container(height=300)
-    for m in u_info.get('chat_history', []): ch.chat_message(m['role']).write(m['text'])
-    p_m = st.chat_input("Mentorunla konuş...")
-    if p_m:
+    with ch:
+        for m in u_info.get('chat_history', []): st.chat_message(m['role']).write(m['text'])
+    if p_m := st.chat_input("Mentorunla konuş..."):
         u_info['chat_history'].append({"role": "user", "text": p_m})
         try:
-            res = genai.GenerativeModel('gemini-1.5-flash-latest').generate_content(p_m).text
+            res = genai.GenerativeModel('gemini-1.5-flash').generate_content(p_m).text
             u_info['chat_history'].append({"role": "assistant", "text": res})
             veritabanini_kaydet(st.session_state.db); st.rerun()
         except: st.warning("Hata!")
 
-# --- 7. ODAK (POMODORO) ---
 elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     st.title(L["basliklar"]["pomo"])
     if not st.session_state.pomo_calisiyor:
         pdk = st.select_slider("Dakika Seç", options=[15, 25, 30, 45, 60, 90], value=25)
         st.session_state.pomo_kalan_saniye = pdk * 60
-
     c1, c2, c3 = st.columns(3)
     if c1.button(L["butonlar"]["baslat"], use_container_width=True):
-        st.session_state.pomo_calisiyor = True
-        st.session_state.son_guncelleme = time.time()
-        st.rerun()
+        st.session_state.pomo_calisiyor = True; st.session_state.son_guncelleme = time.time(); st.rerun()
     if c2.button(L["butonlar"]["durdur"], use_container_width=True):
-        st.session_state.pomo_calisiyor = False
-        st.rerun()
+        st.session_state.pomo_calisiyor = False; st.rerun()
     if c3.button(L["butonlar"]["sifirla"], use_container_width=True):
-        st.session_state.pomo_calisiyor = False
-        st.session_state.pomo_kalan_saniye = 25 * 60
-        st.rerun()
-    
+        st.session_state.pomo_calisiyor = False; st.session_state.pomo_kalan_saniye = 25 * 60; st.rerun()
     m, s = divmod(max(0, int(st.session_state.pomo_kalan_saniye)), 60)
     st.markdown(f"<h1 style='text-align:center; font-size:100px;'>{m:02d}:{s:02d}</h1>", unsafe_allow_html=True)
 
-# --- 8. SINAVLAR ---
 elif menu in ["📅 Sınavlar", "📅 Exams"]:
     st.title(L["basliklar"]["sinavlar"])
-    pdf = st.file_uploader("Sınav Takvimi (PDF)", type="pdf")
+    pdf = st.file_uploader("PDF", type="pdf")
     if pdf and st.button("Sınavları Çıkar"):
         reader = PyPDF2.PdfReader(pdf); text = "".join([p.extract_text() for p in reader.pages])
         try:
-            res = genai.GenerativeModel('gemini-1.5-flash-latest').generate_content(f"JSON sınav çıkar: {text}").text
+            res = genai.GenerativeModel('gemini-1.5-flash').generate_content(f"JSON sınav çıkar: {text}").text
             st.info(res)
         except: st.error("Hata!")
     with st.form("ms"):
@@ -248,25 +243,20 @@ elif menu in ["📅 Sınavlar", "📅 Exams"]:
             u_info['sinavlar'].append({'ders': d, 'tarih': t.strftime("%d.%m.%Y")}); veritabanini_kaydet(st.session_state.db); st.rerun()
     for s in u_info['sinavlar']: st.warning(f"📌 {s['ders']} | {s['tarih']}")
 
-# --- 9. BAŞARILAR ---
 elif menu in ["🏆 Başarılar", "🏆 Achievements"]:
     st.title(L["basliklar"]["basari"])
     k1, k2, k3 = st.columns(3)
     k1.metric(L["labels"]["rutbe"], mevcut_lakap_getir(u_info['level'], u_info['dil']))
-    k2.metric("SEVİYE", u_info['level'])
-    k3.metric("TOPLAM XP", u_info['xp'])
-    st.divider()
+    k2.metric("SEVİYE", u_info['level']); k3.metric("TOPLAM XP", u_info['xp'])
     sx = u_info['level'] * 200
     st.write(f"**{L['labels']['xp_durum']}** ({u_info['xp']} / {sx})")
     st.progress(min(u_info['xp'] / sx, 1.0))
-    st.divider(); st.subheader("🏅 Koleksiyonun")
-    b1, b2, b3 = st.columns(3)
+    st.divider(); b1, b2 = st.columns(2)
     if u_info.get('pomo_count', 0) >= 10: b1.success("🔥 ODAK USTASI")
     else: b1.info(f"🔒 ODAK USTASI ({u_info.get('pomo_count', 0)}/10)")
     if u_info['level'] >= 10: b2.success("👑 VİZYONER")
     else: b2.info("🔒 VİZYONER (Lvl 10)")
 
-# --- 10. AYARLAR ---
 elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
     st.title(L["menu"][-1])
     with st.form("ayarlar"):
@@ -279,5 +269,4 @@ elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
             veritabanini_kaydet(st.session_state.db); st.success("Tamam!"); st.rerun()
 
 if st.session_state.pomo_calisiyor:
-    time.sleep(1)
-    st.rerun()
+    time.sleep(1); st.rerun()
