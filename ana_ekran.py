@@ -202,26 +202,30 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
 elif menu in ["🤖 AI Mentor"]:
     st.title("🤖 AI MENTOR")
     
+    # Mevcut en yaygın model isimlerini bir listeye alalım
+    model_listesi = ['gemini-1.5-flash', 'gemini-pro', 'models/gemini-1.5-flash', 'models/gemini-pro']
+
     # --- 1. BÖLÜM: HAFTALIK ANALİZ ---
     st.subheader("📊 Haftalık Performans Analizi")
     with st.container(border=True):
         st.write("Verilerini analiz edip sana özel tavsiyeler oluşturmamı ister misin?")
         if st.button("HAFTAMI ANALİZ ET ✨", key="analiz_btn"):
-            with st.spinner("Yapay zeka verilerini inceliyor..."):
-                try:
-                    # HATA ÇÖZÜMÜ: Model ismini en yalın haliyle yazıyoruz
-                    model = genai.GenerativeModel('gemini-1.5-flash')
-                    analiz_prompt = f"Sen bir eğitim koçusun. Veriler: {u_info['data'].to_string()}. Başarı oranını yorumla ve 3 tavsiye ver."
-                    response = model.generate_content(analiz_prompt)
-                    st.info(response.text)
-                except Exception as e:
-                    # Eğer yukarıdaki hata verirse alternatif ismi dene
+            with st.spinner("Modellere bağlanılıyor..."):
+                başarılı = False
+                for m_adı in model_listesi:
                     try:
-                        model = genai.GenerativeModel('gemini-pro')
+                        model = genai.GenerativeModel(m_adı)
+                        analiz_prompt = f"Sen bir eğitim koçusun. Veriler: {u_info['data'].to_string()}. Başarı oranını yorumla ve 3 tavsiye ver."
                         response = model.generate_content(analiz_prompt)
-                        st.info(response.text)
+                        st.info(f"✅ {m_adı} üzerinden rapor oluşturuldu:")
+                        st.markdown(response.text)
+                        başarılı = True
+                        break # Biri çalıştıysa diğerlerini deneme
                     except:
-                        st.error(f"⚠️ Model Erişimi Başarısız. Hata Mesajı: {e}")
+                        continue
+                
+                if not başarılı:
+                    st.error("⚠️ Tüm modeller denendi ancak Google AI şu an yanıt vermiyor. Lütfen API Key'inizin geçerli olduğunu Google AI Studio'dan kontrol edin.")
 
     st.divider()
 
@@ -234,18 +238,23 @@ elif menu in ["🤖 AI Mentor"]:
             with st.chat_message(m['role']):
                 st.write(m['text'])
     
-    if p_m := st.chat_input("Sorunu buraya yaz..."):
+    if p_m := st.chat_input("Mentoruna bir şey sor..."):
         u_info['chat_history'].append({"role": "user", "text": p_m})
-        with st.spinner("Mentorun düşünüyor..."):
-            try:
-                # Burada da en garantili ismi kullanıyoruz
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                res = model.generate_content(p_m)
-                u_info['chat_history'].append({"role": "assistant", "text": res.text})
-                veritabanini_kaydet(st.session_state.db)
-                st.rerun()
-            except Exception as e:
-                st.error(f"❌ Mesaj iletilemedi: {e}")
+        with st.spinner("Yanıt bekleniyor..."):
+            başarılı_chat = False
+            for m_adı in model_listesi:
+                try:
+                    model = genai.GenerativeModel(m_adı)
+                    res = model.generate_content(p_m)
+                    u_info['chat_history'].append({"role": "assistant", "text": res.text})
+                    veritabanini_kaydet(st.session_state.db)
+                    başarılı_chat = True
+                    st.rerun()
+                    break
+                except:
+                    continue
+            if not başarılı_chat:
+                st.error("❌ Mesaj iletilemedi. Lütfen internet bağlantınızı veya API anahtarınızı kontrol edin.")
 # --- 7. ODAK (POMODORO) ---
 elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     st.title(L["basliklar"]["pomo"])
@@ -309,4 +318,5 @@ elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
 if st.session_state.pomo_calisiyor:
     time.sleep(1); st.rerun()
     
+
 
