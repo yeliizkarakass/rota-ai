@@ -7,7 +7,7 @@ import os
 import google.generativeai as genai
 import time
 
-# --- 0. AYARLAR & STİL ---
+# --- 0. AYARLAR ---
 st.set_page_config(page_title="ROTA AI", page_icon="🚀", layout="wide")
 
 # --- 1. VERİ & API ---
@@ -29,8 +29,7 @@ def veritabanini_yukle():
                     defaults = {'xp': 0, 'level': 1, 'egitim_duzeyi': 'Üniversite', 'ana_hedef': 'Gelişim', 'sinavlar': [], 'chat_history': [], 'dil': 'TR'}
                     for k, v in defaults.items():
                         if k not in data[u]: data[u][k] = v
-                    df = pd.DataFrame(data[u]['data'])
-                    data[u]['data'] = df
+                    data[u]['data'] = pd.DataFrame(data[u]['data'])
                 return data
         except: return {}
     return {}
@@ -53,7 +52,7 @@ if 'pomo_kalan_saniye' not in st.session_state: st.session_state.pomo_kalan_sani
 if 'pomo_calisiyor' not in st.session_state: st.session_state.pomo_calisiyor = False
 if 'son_guncelleme' not in st.session_state: st.session_state.son_guncelleme = time.time()
 
-# --- 2. GİRİŞ KONTROL ---
+# --- 2. GİRİŞ ---
 if 'aktif_kullanici' not in st.session_state:
     if os.path.exists(CONFIG_FILE):
         try:
@@ -105,19 +104,27 @@ if menu == "🏠 Panel":
             st.plotly_chart(fig, use_container_width=True)
         with c2:
             y, h = u_info['data']['Yapılan'].astype(float).sum(), u_info['data']['Hedef'].astype(float).sum()
-            st.plotly_chart(go.Figure(go.Pie(labels=['Tamamlanan', 'Kalan'], values=[y, max(0, h-y)], hole=.6)), use_container_width=True)
+            st.plotly_chart(go.Figure(go.Pie(labels=['Biten', 'Kalan'], values=[y, max(0, h-y)], hole=.6)), use_container_width=True)
 
-    st.subheader("🗓️ Haftalık Plan")
+    st.subheader("🗓️ Haftalık Önizleme")
     gunler = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
+    cols = st.columns(7)
+    for i, g in enumerate(gunler):
+        with cols[i]:
+            st.markdown(f"<div style='background:#4FACFE; color:white; text-align:center; border-radius:5px;'>{g[:3]}</div>", unsafe_allow_html=True)
+            temp = u_info['data'][u_info['data']['Gün'] == g]
+            for _, r in temp.iterrows(): st.caption(f"• {r['Görev']}")
+
+    st.divider()
     for g in gunler:
         with st.expander(f"📅 {g}"):
             temp = u_info['data'][u_info['data']['Gün'] == g]
             for idx, row in temp.iterrows():
                 col1, col2, col3 = st.columns([3, 2, 1])
                 col1.write(row['Görev'])
-                y_yeni = col2.number_input("Yapılan", value=int(row['Yapılan']), key=f"v_{idx}")
-                if y_yeni != row['Yapılan']:
-                    u_info['data'].at[idx, 'Yapılan'] = y_yeni
+                y_val = col2.number_input("Yapılan", value=int(row['Yapılan']), key=f"v_{idx}")
+                if y_val != row['Yapılan']:
+                    u_info['data'].at[idx, 'Yapılan'] = y_val
                     u_info['xp'] += 10
                     veritabanini_kaydet(st.session_state.db); st.rerun()
                 if col3.button("🗑️", key=f"d_{idx}"):
@@ -125,22 +132,22 @@ if menu == "🏠 Panel":
                     veritabanini_kaydet(st.session_state.db); st.rerun()
             with st.form(f"f_{g}", clear_on_submit=True):
                 f1, f2, f3 = st.columns([2, 1, 1])
-                ng, nh, nb = f1.text_input("Görev"), f2.number_input("Hedef", 1), f3.selectbox("Birim", ["Soru", "Saat"])
+                ng, nh, nb = f1.text_input("Görev"), f2.number_input("Hedef", 1), f3.selectbox("Birim", ["Soru", "Saat", "Konu"])
                 if st.form_submit_button("Ekle"):
                     u_info['data'] = pd.concat([u_info['data'], pd.DataFrame([{'Gün': g, 'Görev': ng, 'Hedef': nh, 'Birim': nb, 'Yapılan': 0}])], ignore_index=True)
                     veritabanini_kaydet(st.session_state.db); st.rerun()
 
 elif menu == "🤖 AI Mentor":
     st.title("🤖 AI MENTOR")
-    if st.button("Haftalık Analiz ✨"):
+    if st.button("HAFTALIK ANALİZ ✨"):
         try:
             model = genai.GenerativeModel('gemini-1.5-flash')
             res = model.generate_content(f"Veriler: {u_info['data'].to_string()}. Analiz et.")
             st.info(res.text)
         except Exception as e: st.error(f"Hata: {e}")
     st.divider()
-    chat_h = st.container(height=300)
-    for m in u_info.get('chat_history', []): chat_h.chat_message(m['role']).write(m['text'])
+    ch = st.container(height=300)
+    for m in u_info.get('chat_history', []): ch.chat_message(m['role']).write(m['text'])
     if p_m := st.chat_input("Sor..."):
         u_info['chat_history'].append({"role": "user", "text": p_m})
         try:
@@ -150,13 +157,44 @@ elif menu == "🤖 AI Mentor":
         except: st.error("Bağlantı hatası.")
 
 elif menu == "⏱️ Odak":
-    st.title("⏱️ ODAK")
+    st.title("⏱️ POMODORO")
     if not st.session_state.pomo_calisiyor:
         dk = st.slider("Dakika", 5, 120, 25)
         st.session_state.pomo_kalan_saniye = dk * 60
     c1, c2, c3 = st.columns(3)
-    if c1.button("BAŞLAT"): st.session_state.pomo_calisiyor = True; st.session_state.son_guncelleme = time.time(); st.rerun()
+    if c1.button("BAŞLAT"):
+        st.session_state.pomo_calisiyor = True
+        st.session_state.son_guncelleme = time.time()
+        st.rerun()
     if c2.button("DURDUR"): st.session_state.pomo_calisiyor = False; st.rerun()
     if c3.button("SIFIRLA"): st.session_state.pomo_calisiyor = False; st.session_state.pomo_kalan_saniye = 25*60; st.rerun()
+    
     if st.session_state.pomo_calisiyor:
-        st.session_state.pomo_kalan_saniye -= (time.time() - st.session_state.son
+        gecen = time.time() - st.session_state.son_guncelleme
+        st.session_state.pomo_kalan_saniye -= gecen
+        st.session_state.son_guncelleme = time.time()
+        if st.session_state.pomo_kalan_saniye <= 0:
+            st.session_state.pomo_calisiyor = False; st.balloons()
+            u_info['xp'] += 30; veritabanini_kaydet(st.session_state.db)
+        time.sleep(1); st.rerun()
+    
+    m, s = divmod(int(st.session_state.pomo_kalan_saniye), 60)
+    st.header(f"{m:02d}:{s:02d}")
+
+elif menu == "📅 Sınavlar":
+    st.title("📅 SINAV TAKVİMİ")
+    with st.form("exam_form"):
+        d, t = st.text_input("Ders Adı"), st.date_input("Sınav Tarihi")
+        if st.form_submit_button("Ekle"):
+            u_info['sinavlar'].append({'ders': d, 'tarih': str(t)})
+            veritabanini_kaydet(st.session_state.db); st.rerun()
+    if u_info['sinavlar']:
+        st.table(pd.DataFrame(u_info['sinavlar']))
+
+elif menu == "⚙️ Ayarlar":
+    st.title("⚙️ AYARLAR")
+    u_info['ana_hedef'] = st.text_input("Kariyer Hedefin", u_info.get('ana_hedef', ''))
+    u_info['egitim_duzeyi'] = st.selectbox("Düzey", ["Lise", "Üniversite"], index=1)
+    if st.button("AYARLARI KAYDET"):
+        veritabanini_kaydet(st.session_state.db)
+        st.success("Kaydedildi!")
