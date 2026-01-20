@@ -272,13 +272,14 @@ elif menu in ["📅 Sınavlar", "📅 Exams"]:
 
 elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     st.title(L["basliklar"]["pomo"])
-    dk = st.select_slider("Dakika", options=[15, 25, 45, 60], value=25)
+    dk = st.select_slider("Dakika", options=[15, 25, 45, 60, 75, 90, 105, 130, 155], value=25)
     c1, c2, c3 = st.columns(3)
     if c1.button("🚀 BAŞLAT"): st.session_state.pomo_kalan = dk*60; st.session_state.pomo_aktif = True; st.session_state.son_tik = time.time(); st.rerun()
     if c2.button("⏸️ DURDUR"): st.session_state.pomo_aktif = False; st.rerun()
     if c3.button("🔄 SIFIRLA"): st.session_state.pomo_aktif = False; st.session_state.pomo_kalan = 25*60; st.rerun()
     st.markdown(f"<h1 style='text-align:center; font-size:150px; color:{TEMA};'>{m_p:02d}:{s_p:02d}</h1>", unsafe_allow_html=True)
 
+# --- AKADEMİK (GNO HESAPLAMA GÜNCELLENDİ ✨) ---
 elif menu in ["🎓 Akademik", "🎓 Academic"]:
     st.title(L["basliklar"]["akademik"])
     t_a1, t_a2 = st.tabs(["📉 Devamsızlık", "📊 GNO Tahmini"])
@@ -296,10 +297,53 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
                 u_info['attendance'][idx]['Yapılan'] = val; veritabanini_kaydet(st.session_state.db); st.rerun()
             if col3.button("🗑️", key=f"at_d_{idx}"):
                 u_info['attendance'].pop(idx); veritabanini_kaydet(st.session_state.db); st.rerun()
+    
     with t_a2:
-        u_info['mevcut_gano'] = st.number_input("Mevcut GNO", 0.0, 4.0, value=float(u_info.get('mevcut_gano', 0.0)))
-        u_info['tamamlanan_kredi'] = st.number_input("Toplam Kredi", 0, 300, value=int(u_info.get('tamamlanan_kredi', 0)))
-        if st.button("Genel Bilgileri Kaydet"): veritabanini_kaydet(st.session_state.db); st.success("Kaydedildi!")
+        st.subheader("📊 Mezuniyet/Genel Ortalama Hesaplayıcı")
+        c_g1, c_g2 = st.columns(2)
+        m_gano = c_g1.number_input("Mevcut GNO (Eski Dönemler)", 0.0, 4.0, value=float(u_info.get('mevcut_gano', 0.0)), step=0.01)
+        m_kredi = c_g2.number_input("Tamamlanan Toplam Kredi", 0, 300, value=int(u_info.get('tamamlanan_kredi', 0)))
+        
+        if m_gano != u_info['mevcut_gano'] or m_kredi != u_info['tamamlanan_kredi']:
+            u_info['mevcut_gano'], u_info['tamamlanan_kredi'] = m_gano, m_kredi
+            veritabanini_kaydet(st.session_state.db)
+
+        st.divider()
+        st.write("➕ **Bu Dönemki Dersleri Ekle**")
+        with st.form("gpa_new_ders"):
+            f1, f2, f3 = st.columns([3, 1, 1])
+            d_ad = f1.text_input("Ders Adı")
+            d_kr = f2.number_input("Kredi", 1, 10, 3)
+            d_not = f3.selectbox("Harf Notu", ["AA", "BA", "BB", "CB", "CC", "DC", "DD", "FD", "FF"])
+            if st.form_submit_button("Dersi Listeye Ekle"):
+                u_info['gpa_list'].append({"ders": d_ad, "kredi": d_kr, "not": d_not})
+                veritabanini_kaydet(st.session_state.db); st.rerun()
+
+        if u_info['gpa_list']:
+            st.write("📋 **Yeni Dönem Ders Listesi**")
+            not_skalasi = {"AA": 4.0, "BA": 3.5, "BB": 3.0, "CB": 2.5, "CC": 2.0, "DC": 1.5, "DD": 1.0, "FD": 0.5, "FF": 0.0}
+            
+            # Tablo gösterimi ve silme
+            for i, d in enumerate(u_info['gpa_list']):
+                gc1, gc2, gc3, gc4 = st.columns([3, 1, 1, 1])
+                gc1.write(d['ders'])
+                gc2.write(f"{d['kredi']} Kredi")
+                gc3.write(d['not'])
+                if gc4.button("🗑️", key=f"gpa_del_{i}"):
+                    u_info['gpa_list'].pop(i); veritabanini_kaydet(st.session_state.db); st.rerun()
+
+            # Hesaplama Mantığı
+            eski_toplam_puan = m_gano * m_kredi
+            yeni_toplam_puan = sum([not_skalasi[x['not']] * x['kredi'] for x in u_info['gpa_list']])
+            yeni_toplam_kredi = sum([x['kredi'] for x in u_info['gpa_list']])
+            
+            toplam_genel_kredi = m_kredi + yeni_toplam_kredi
+            if toplam_genel_kredi > 0:
+                genel_gano = (eski_toplam_puan + yeni_toplam_puan) / toplam_genel_kredi
+                st.success(f"📈 **Tahmini Yeni Genel GNO: {genel_gano:.2f}**")
+                st.info(f"Dönem Ortalaması: {(yeni_toplam_puan/yeni_toplam_kredi if yeni_toplam_kredi > 0 else 0):.2f}")
+            
+            if st.button("Listeyi Sıfırla"): u_info['gpa_list'] = []; veritabanini_kaydet(st.session_state.db); st.rerun()
 
 elif menu == "🤖 AI Mentor":
     st.title("🤖 AI AKADEMİK KOÇ")
