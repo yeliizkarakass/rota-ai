@@ -59,7 +59,7 @@ def veritabanini_yukle():
             with open(DB_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 for u in data:
-                    # HER GİRİŞTE EKSİK ANAHTARLARI KONTROL ET VE TAMAMLA
+                    # HER GİRİŞTE EKSİK ANAHTARLARI KONTROL ET VE TAMAMLA (KeyError engelleyici)
                     defaults = {'xp': 0, 'level': 1, 'ana_hedef': 'Öğrenci', 'sinavlar': [], 'chat_history': [], 'notes': [], 'pomo_count': 0, 'dil': 'TR', 'habits': [], 'attendance': [], 'gpa_list': [], 'mevcut_gano': 0.0, 'tamamlanan_kredi': 0}
                     for k, v in defaults.items():
                         if k not in data[u]: data[u][k] = v
@@ -125,11 +125,8 @@ if st.session_state.aktif_kullanici is None:
 u_id = st.session_state.aktif_kullanici
 u_info = st.session_state.db[u_id]
 
-# EĞER BU SATIRDA HATA ALIRSAN DİYE EK KORUMA
-if 'sinavlar' not in u_info: u_info['sinavlar'] = []
-if 'dil' not in u_info: u_info['dil'] = 'TR'
-
-L = DIL_PAKETI.get(u_info['dil'], DIL_PAKETI["TR"])
+# DİL KİLİDİ: İngilizce mi Türkçe mi anında karar verir
+L = DIL_PAKETI.get(u_info.get('dil', 'TR'), DIL_PAKETI["TR"])
 
 st.sidebar.title("🚀 ROTA AI")
 if st.session_state.pomo_calisiyor:
@@ -143,7 +140,7 @@ if st.session_state.pomo_calisiyor:
 
 m_g, s_g = divmod(max(0, int(st.session_state.pomo_kalan_saniye)), 60)
 st.sidebar.markdown(f"### ⏳ Sayaç: `{m_g:02d}:{s_g:02d}`")
-st.sidebar.metric(L["labels"]["rutbe"], mevcut_lakap_getir(u_info['level'], u_info['dil']))
+st.sidebar.metric(L["labels"]["rutbe"], mevcut_lakap_getir(u_info['level'], u_info.get('dil', 'TR')))
 
 menu = st.sidebar.radio("NAVİGASYON", L["menu"])
 
@@ -195,13 +192,20 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
                     u_info['data'] = pd.concat([u_info['data'], pd.DataFrame([{'Gün': g, 'Görev': ng, 'Hedef': nh, 'Birim': nb, 'Yapılan': 0}])], ignore_index=True)
                     veritabanini_kaydet(st.session_state.db); st.rerun()
 
+    st.divider()
+    st.subheader("📊 Alışkanlık Takipçisi")
+    h_df = pd.DataFrame(u_info.get('habits', []), columns=["Alışkanlık", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"])
+    if h_df.empty: h_df = pd.DataFrame([{"Alışkanlık": "05:30 Kalkış ⏰", "Pzt": False, "Sal": False, "Çar": False, "Per": False, "Cum": False, "Cmt": False, "Paz": False}])
+    e_habits = st.data_editor(h_df, num_rows="dynamic", use_container_width=True, hide_index=True, key="h_editor")
+    if not h_df.equals(e_habits):
+        u_info['habits'] = e_habits.to_dict(orient='records'); veritabanini_kaydet(st.session_state.db)
+
 # SINAVLAR (KeyError Tamiri)
 elif menu in ["📅 Sınavlar", "📅 Exams"]:
     st.title(L["basliklar"]["sinavlar"])
     with st.form("ex_f", clear_on_submit=True):
         c1, c2 = st.columns(2); d_a = c1.text_input("Ders"); t_a = c2.date_input("Tarih")
         if st.form_submit_button(L["butonlar"]["ekle"]):
-            if 'sinavlar' not in u_info: u_info['sinavlar'] = [] # ÇİFT KORUMA
             u_info['sinavlar'].append({'id': str(uuid.uuid4()), 'ders': d_a, 'tarih': str(t_a)})
             veritabanini_kaydet(st.session_state.db); st.rerun()
 
@@ -253,7 +257,7 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
 elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
     st.title(L["menu"][-1])
     with st.form("settings_f"):
-        nl = st.selectbox("Dil / Language", ["TR", "EN"], index=0 if u_info.get('dil') == 'TR' else 1)
+        nl = st.selectbox("Dil / Language", ["TR", "EN"], index=0 if u_info.get('dil', 'TR') == 'TR' else 1)
         ns = st.text_input(L["labels"]["sifre"], value=u_info['password'], type="password")
         nm = st.text_input(L["labels"]["hedef"], value=u_info.get('ana_hedef', 'Mühendis'))
         if st.form_submit_button(L["butonlar"]["ekle"]):
