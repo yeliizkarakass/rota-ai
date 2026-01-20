@@ -73,19 +73,16 @@ def veritabanini_yukle():
 def veritabanini_kaydet(db):
     to_save = {}
     for u in db:
-        to_save[u] = {
-            'password': db[u]['password'], 'ana_hedef': db[u].get('ana_hedef', 'Mühendis'),
-            'egitim_duzeyi': db[u].get('egitim_duzeyi', 'Üniversite'), 'dil': db[u].get('dil', 'TR'),
-            'xp': db[u].get('xp', 0), 'level': db[u].get('level', 1), 'pomo_count': db[u].get('pomo_count', 0),
-            'chat_history': db[u].get('chat_history', []), 'notes': db[u].get('notes', []),
-            'habits': db[u].get('habits', []), 'attendance': db[u].get('attendance', []),
-            'gpa_list': db[u].get('gpa_list', []), 'mevcut_gano': db[u].get('mevcut_gano', 0.0),
-            'tamamlanan_kredi': db[u].get('tamamlanan_kredi', 0),
-            'sinavlar': db[u].get('sinavlar', []), 
-            'data': db[u]['data'].to_dict(orient='records')
-        }
+        # Pandas DataFrame'i JSON'a çevirmek için listeye döndürür
+        u_dict = db[u].copy()
+        if isinstance(u_dict['data'], pd.DataFrame):
+            u_dict['data'] = u_dict['data'].to_dict(orient='records')
+        to_save[u] = u_dict
+    
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(to_save, f, ensure_ascii=False, indent=4)
+        f.flush() # Dosyayı fiziksel olarak yazmaya zorlar
+        os.fsync(f.fileno()) # İşletim sistemine 'şimdi yaz' der
 
 if 'db' not in st.session_state: st.session_state.db = veritabanini_yukle()
 if 'pomo_kalan_saniye' not in st.session_state: st.session_state.pomo_kalan_saniye = 25 * 60
@@ -114,7 +111,8 @@ if st.session_state.aktif_kullanici is None:
                 if nu not in st.session_state.db:
                     new_df = pd.DataFrame(columns=['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan'])
                     st.session_state.db[nu] = {'password': np, 'xp': 0, 'level': 1, 'ana_hedef': 'Mühendis', 'data': new_df, 'attendance': [], 'gpa_list': [], 'mevcut_gano': 0.0, 'tamamlanan_kredi': 0}
-                    veritabanini_kaydet(st.session_state.db); st.success("Kayıt Başarılı!")
+                    veritabanini_kaydet(st.session_state.db)
+                    st.success("Kayıt Başarılı! Artık Giriş Sekmesine Geçebilirsiniz.")
                 else: st.warning("Kullanıcı mevcut.")
     st.stop()
 
@@ -314,9 +312,7 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
             st.table(pd.DataFrame(u_info['gpa_list']))
             nk = {"AA": 4.0, "BA": 3.5, "BB": 3.0, "CB": 2.5, "CC": 2.0, "DC": 1.5, "DD": 1.0, "FD": 0.5, "FF": 0.0}
             
-            # Eski puanlar
             eski_toplam_puan = m_gano * m_kredi
-            # Yeni puanlar
             yeni_toplam_puan = sum([nk[r['not']] * r['kredi'] for r in u_info['gpa_list']])
             yeni_toplam_kredi = sum([r['kredi'] for r in u_info['gpa_list']])
             
@@ -361,8 +357,6 @@ elif menu in ["🏆 Başarılar", "🏆 Achievements"]:
 
 elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
     st.title(L["menu"][-1])
-    # DİKKAT: Ayarlar kısmında 'st.form' içindeki 'ni' (Kullanıcı Adı) değiştiğinde dosya yapısı bozuluyordu.
-    # Bu kısmı daha güvenli hale getirdik.
     with st.form("settings_f"):
         nl = st.selectbox("Dil / Language", ["TR", "EN"], index=0 if u_info.get('dil') == 'TR' else 1)
         ns = st.text_input(L["labels"]["sifre"], value=u_info['password'], type="password")
