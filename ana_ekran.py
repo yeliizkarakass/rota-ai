@@ -15,17 +15,9 @@ except ImportError:
     os.system('pip install PyPDF2')
     import PyPDF2
 
-# --- 0. AYARLAR ---
+# --- 0. KONFİGÜRASYON VE SABİTLER ---
 st.set_page_config(page_title="ROTA AI PRO", page_icon="🚀", layout="wide")
-
-# --- 1. VERİ YÖNETİMİ ---
 DB_FILE = "rota_database.json"
-
-try:
-    if "GEMINI_API_KEY" in st.secrets:
-        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-except:
-    pass
 
 LAKAPLAR = {
     1: {"TR": "Meraklı Yolcu 🚶", "EN": "Curious Traveler 🚶"},
@@ -52,6 +44,14 @@ DIL_PAKETI = {
     }
 }
 
+# --- 1. FONKSİYONLAR (NAMEERROR ALMAMAK İÇİN EN ÜSTTE) ---
+
+def mevcut_lakap_getir(lvl, dil):
+    secili_lakap = LAKAPLAR[1].get(dil, "TR")
+    for l in sorted(LAKAPLAR.keys()):
+        if lvl >= l: secili_lakap = LAKAPLAR[l].get(dil, "TR")
+    return secili_lakap
+
 def veritabanini_yukle():
     if os.path.exists(DB_FILE):
         try:
@@ -68,6 +68,9 @@ def veritabanini_yukle():
                         if k not in data[u]: data[u][k] = v
                     if not isinstance(data[u].get('data'), pd.DataFrame):
                         data[u]['data'] = pd.DataFrame(data[u].get('data', []))
+                    for col in ['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan']:
+                        if col not in data[u]['data'].columns:
+                            data[u]['data'][col] = "" if col != 'Yapılan' else 0
                 return data
         except: return {}
     return {}
@@ -84,12 +87,16 @@ def veritabanini_kaydet(db):
         f.flush()
         os.fsync(f.fileno())
 
+# --- 2. VERİ VE SESSION BAŞLATMA ---
+if "GEMINI_API_KEY" in st.secrets:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+
 if 'db' not in st.session_state: st.session_state.db = veritabanini_yukle()
 if 'pomo_kalan' not in st.session_state: st.session_state.pomo_kalan = 25 * 60
 if 'pomo_aktif' not in st.session_state: st.session_state.pomo_aktif = False
 if 'son_tik' not in st.session_state: st.session_state.son_tik = time.time()
 
-# --- 2. GİRİŞ & KAYIT ---
+# --- 3. GİRİŞ & KAYIT ---
 if 'user' not in st.session_state: st.session_state.user = None
 
 if st.session_state.user is None:
@@ -117,6 +124,7 @@ if st.session_state.user is None:
                 veritabanini_kaydet(st.session_state.db); st.success("Kayıt Başarılı!")
     st.stop()
 
+# --- 4. KULLANICI VERİLERİ VE TEMA ---
 u_id = st.session_state.user
 u_info = st.session_state.db[u_id]
 L = DIL_PAKETI.get(u_info['dil'], DIL_PAKETI["TR"])
@@ -124,7 +132,7 @@ TEMA = u_info.get('tema_rengi', '#4FACFE')
 
 st.markdown(f"<style>h1, h2, h3, .stSubheader {{ color: {TEMA} !important; }} .stButton>button {{ background-color: {TEMA} !important; color: white !important; }}</style>", unsafe_allow_html=True)
 
-# --- 3. SIDEBAR ---
+# --- 5. SIDEBAR (POMODORO & NOTLAR) ---
 st.sidebar.title("🚀 ROTA AI")
 if st.session_state.pomo_aktif and st.session_state.pomo_kalan > 0:
     simdi = time.time()
@@ -136,8 +144,8 @@ if st.session_state.pomo_aktif and st.session_state.pomo_kalan > 0:
         veritabanini_kaydet(st.session_state.db); st.balloons()
     time.sleep(0.1); st.rerun()
 
-m, s = divmod(max(0, int(st.session_state.pomo_kalan)), 60)
-st.sidebar.markdown(f"### ⏳ Sayaç: `{m:02d}:{s:02d}`")
+m_p, s_p = divmod(max(0, int(st.session_state.pomo_kalan)), 60)
+st.sidebar.markdown(f"### ⏳ Sayaç: `{m_p:02d}:{s_p:02d}`")
 st.sidebar.metric(L["labels"]["rutbe"], mevcut_lakap_getir(u_info['level'], u_info['dil']))
 
 menu = st.sidebar.radio("NAVİGASYON", L["menu"])
@@ -152,7 +160,7 @@ if not df_n.equals(edited_n):
 if st.sidebar.button(L["butonlar"]["cikis"]):
     st.session_state.user = None; st.rerun()
 
-# --- 4. SAYFALAR ---
+# --- 6. SAYFALAR ---
 
 # PANEL
 if menu in ["🏠 Panel", "🏠 Dashboard"]:
@@ -164,13 +172,12 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
                              go.Bar(x=u_info['data']['Görev'], y=u_info['data']['Yapılan'], name="Biten", marker_color=TEMA)])
             st.plotly_chart(fig, use_container_width=True)
         with c2:
-            ty = u_info['data']['Yapılan'].astype(float).sum()
-            th = u_info['data']['Hedef'].astype(float).sum()
+            ty, th = u_info['data']['Yapılan'].astype(float).sum(), u_info['data']['Hedef'].astype(float).sum()
             st.plotly_chart(go.Figure(go.Pie(labels=['Biten', 'Kalan'], values=[ty, max(0, th-ty)], hole=.6, marker_colors=[TEMA, '#FF4B4B'])), use_container_width=True)
 
     st.subheader(L["basliklar"]["onizleme"])
-    gunler = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
     cols = st.columns(7)
+    gunler = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
     for i, g in enumerate(gunler):
         with cols[i]:
             st.markdown(f"<div style='background:{TEMA}; color:white; text-align:center; border-radius:5px; font-weight:bold;'>{g[:3].upper()}</div>", unsafe_allow_html=True)
@@ -198,7 +205,7 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
 
 # ALIŞKANLIKLAR
 elif menu in ["📊 Alışkanlıklar", "📊 Habits"]:
-    st.title("📊 Alışkanlık Takipçisi")
+    st.title("📊 Alışkanlık Takip Sistemi")
     h_df = pd.DataFrame(u_info.get('habits', []), columns=["Alışkanlık", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"])
     edited_h = st.data_editor(h_df, num_rows="dynamic", use_container_width=True, hide_index=True)
     if not h_df.equals(edited_h):
@@ -207,7 +214,7 @@ elif menu in ["📊 Alışkanlıklar", "📊 Habits"]:
 # SINAVLAR
 elif menu in ["📅 Sınavlar", "📅 Exams"]:
     st.title(L["basliklar"]["sinavlar"])
-    pdf = st.file_uploader("PDF", type="pdf")
+    pdf = st.file_uploader("PDF Yükle", type="pdf")
     if pdf and st.button(L["butonlar"]["analiz"]):
         reader = PyPDF2.PdfReader(pdf); txt = "".join([p.extract_text() for p in reader.pages])
         st.info(genai.GenerativeModel('gemini-1.5-flash').generate_content(f"Sınavları ayıkla: {txt}").text)
@@ -223,18 +230,18 @@ elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     st.title(L["basliklar"]["pomo"])
     dk = st.select_slider("Dakika", options=[15, 25, 45, 60], value=25)
     c1, c2, c3 = st.columns(3)
-    if c1.button("BAŞLAT"): st.session_state.pomo_kalan = dk*60; st.session_state.pomo_aktif = True; st.session_state.son_tik = time.time(); st.rerun()
-    if c2.button("DURDUR"): st.session_state.pomo_aktif = False; st.rerun()
-    if c3.button("SIFIRLA"): st.session_state.pomo_aktif = False; st.session_state.pomo_kalan = 25*60; st.rerun()
-    st.markdown(f"<h1 style='text-align:center; font-size:150px; color:{TEMA};'>{m:02d}:{s:02d}</h1>", unsafe_allow_html=True)
+    if c1.button("🚀 BAŞLAT"): st.session_state.pomo_kalan = dk*60; st.session_state.pomo_aktif = True; st.session_state.son_tik = time.time(); st.rerun()
+    if c2.button("⏸️ DURDUR"): st.session_state.pomo_aktif = False; st.rerun()
+    if c3.button("🔄 SIFIRLA"): st.session_state.pomo_aktif = False; st.session_state.pomo_kalan = 25*60; st.rerun()
+    st.markdown(f"<h1 style='text-align:center; font-size:150px; color:{TEMA};'>{m_p:02d}:{s_p:02d}</h1>", unsafe_allow_html=True)
 
-# AKADEMİK (DEVAMSIZLIK & GNO BURADA ÇALIŞIYOR ✨)
+# AKADEMİK
 elif menu in ["🎓 Akademik", "🎓 Academic"]:
     st.title(L["basliklar"]["akademik"])
     t_a1, t_a2 = st.tabs(["📉 Devamsızlık", "📊 GNO Tahmini"])
     with t_a1:
         with st.form("at_f"):
-            c1, c2 = st.columns(2); dn, dl = c1.text_input("Ders"), c2.number_input("Limit", 1, 15, 4)
+            dn, dl = st.text_input("Ders"), st.number_input("Limit", 1, 15, 4)
             if st.form_submit_button("Ders Ekle"):
                 u_info['attendance'].append({"id": str(uuid.uuid4()), "Ders": dn, "Limit": dl, "Yapılan": 0})
                 veritabanini_kaydet(st.session_state.db); st.rerun()
@@ -247,11 +254,9 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
             if col3.button("🗑️", key=f"at_d_{idx}"):
                 u_info['attendance'].pop(idx); veritabanini_kaydet(st.session_state.db); st.rerun()
     with t_a2:
-        m_gano = st.number_input("Mevcut GNO", 0.0, 4.0, value=float(u_info.get('mevcut_gano', 0.0)), step=0.01)
-        m_kredi = st.number_input("Toplam Kredi", 0, 300, value=int(u_info.get('tamamlanan_kredi', 0)))
-        if st.button("Genel Bilgileri Kaydet"):
-            u_info['mevcut_gano'], u_info['tamamlanan_kredi'] = m_gano, m_kredi
-            veritabanini_kaydet(st.session_state.db); st.success("Kaydedildi!")
+        u_info['mevcut_gano'] = st.number_input("Mevcut GNO", 0.0, 4.0, value=float(u_info.get('mevcut_gano', 0.0)))
+        u_info['tamamlanan_kredi'] = st.number_input("Toplam Kredi", 0, 300, value=int(u_info.get('tamamlanan_kredi', 0)))
+        if st.button("Genel Bilgileri Kaydet"): veritabanini_kaydet(st.session_state.db); st.success("Kaydedildi!")
 
 # AI MENTOR
 elif menu == "🤖 AI Mentor":
@@ -269,9 +274,10 @@ elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
     with st.form("set"):
         new_id = st.text_input("Kullanıcı Adı", value=u_id)
         new_pw = st.text_input("Şifre", value=u_info['password'], type="password")
+        new_dil = st.selectbox("Dil", ["TR", "EN"], index=0 if u_info['dil'] == 'TR' else 1)
         new_theme = st.color_picker("Tema Rengi", value=TEMA)
         if st.form_submit_button("GÜNCELLE"):
             if new_id != u_id: st.session_state.db[new_id] = st.session_state.db.pop(u_id); st.session_state.user = new_id
             u_info = st.session_state.db[st.session_state.user]
-            u_info.update({'password': new_pw, 'tema_rengi': new_theme})
+            u_info.update({'password': new_pw, 'dil': new_dil, 'tema_rengi': new_theme})
             veritabanini_kaydet(st.session_state.db); st.rerun()
