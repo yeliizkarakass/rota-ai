@@ -6,7 +6,7 @@ import os
 import plotly.graph_objects as go
 import google.generativeai as genai
 
-# ------------------ AYARLAR ------------------
+# ================== AYARLAR ==================
 st.set_page_config(page_title="ROTA AI PRO", page_icon="🚀", layout="wide")
 
 DB_FILE = "rota_database.json"
@@ -15,29 +15,16 @@ CONFIG_FILE = "user_config.json"
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# ------------------ DİL & LAKAP ------------------
+# ================== LAKAPLAR ==================
 LAKAPLAR = {
     1: {"TR": "Meraklı Yolcu 🚶", "EN": "Curious Traveler 🚶"},
     4: {"TR": "Disiplin Kurucu 🏗️", "EN": "Discipline Builder 🏗️"},
     8: {"TR": "Odak Ustası 🎯", "EN": "Focus Master 🎯"},
     13: {"TR": "Strateji Dehası 🧠", "EN": "Strategy Genius 🧠"},
     20: {"TR": "Vizyoner Lider 👑", "EN": "Visionary Leader 👑"},
-    36: {"TR": "Zirve Mimarı 🏔️", "EN": "Summit Architect 🏔️"},
-    50: {"TR": "Efsane 🌟", "EN": "Legend 🌟"}
 }
 
-DIL_PAKETI = {
-    "TR": {
-        "menu": ["🏠 Panel", "📊 Alışkanlıklar", "🤖 AI Mentor", "⚙️ Ayarlar"],
-        "labels": {"rutbe": "Rütbe"}
-    },
-    "EN": {
-        "menu": ["🏠 Dashboard", "📊 Habits", "🤖 AI Mentor", "⚙️ Settings"],
-        "labels": {"rutbe": "Rank"}
-    }
-}
-
-# ------------------ DB ------------------
+# ================== DB ==================
 def veritabanini_yukle():
     if not os.path.exists(DB_FILE):
         return {}
@@ -56,9 +43,13 @@ def veritabanini_yukle():
             "data": [],
             "pomo_count": 0
         }
+
         for k, v in defaults.items():
             if k not in data[u]:
                 data[u][k] = v
+
+        if not isinstance(data[u]["data"], list):
+            data[u]["data"] = []
 
         data[u]["data"] = pd.DataFrame(data[u]["data"])
 
@@ -76,14 +67,14 @@ def veritabanini_kaydet(db):
         json.dump(out, f, ensure_ascii=False, indent=4)
 
 
-def mevcut_lakap_getir(lvl, dil):
+def mevcut_lakap(level, dil):
     secili = LAKAPLAR[1][dil]
     for l in LAKAPLAR:
-        if lvl >= l:
+        if level >= l:
             secili = LAKAPLAR[l][dil]
     return secili
 
-# ------------------ SESSION ------------------
+# ================== SESSION ==================
 if "db" not in st.session_state:
     st.session_state.db = veritabanini_yukle()
 
@@ -96,7 +87,7 @@ if "pomo_aktif" not in st.session_state:
 if "pomo_bitis" not in st.session_state:
     st.session_state.pomo_bitis = None
 
-# ------------------ AUTO LOGIN ------------------
+# ================== AUTO LOGIN ==================
 if st.session_state.user is None and os.path.exists(CONFIG_FILE):
     try:
         with open(CONFIG_FILE, "r") as f:
@@ -106,7 +97,7 @@ if st.session_state.user is None and os.path.exists(CONFIG_FILE):
     except:
         pass
 
-# ------------------ LOGIN ------------------
+# ================== LOGIN ==================
 if st.session_state.user is None:
     st.title("🚀 ROTA AI")
 
@@ -118,21 +109,25 @@ if st.session_state.user is None:
         rem = st.checkbox("Beni Hatırla")
 
         if st.button("GİRİŞ"):
-            if u in st.session_state.db and st.session_state.db[u]["password"] == p:
+            if (
+                u in st.session_state.db
+                and "password" in st.session_state.db[u]
+                and st.session_state.db[u]["password"] == p
+            ):
                 st.session_state.user = u
                 if rem:
                     with open(CONFIG_FILE, "w") as f:
                         json.dump({"user": u}, f)
                 st.rerun()
             else:
-                st.error("Hatalı bilgi")
+                st.error("Hatalı kullanıcı veya şifre")
 
     with t2:
         nu = st.text_input("Yeni Kullanıcı")
         np = st.text_input("Yeni Şifre", type="password")
 
         if st.button("KAYIT OL"):
-            if nu not in st.session_state.db:
+            if nu and nu not in st.session_state.db:
                 st.session_state.db[nu] = {
                     "password": np,
                     "xp": 0,
@@ -148,35 +143,31 @@ if st.session_state.user is None:
 
     st.stop()
 
-# ------------------ ANA ------------------
+# ================== ANA ==================
 u_info = st.session_state.db[st.session_state.user]
-L = DIL_PAKETI[u_info["dil"]]
-TEMA = u_info["tema_rengi"]
 
 st.markdown(
-    f"<style>h1,h2,h3{{color:{TEMA}}}.stButton>button{{background:{TEMA};color:white}}</style>",
+    f"<style>h1,h2,h3{{color:{u_info['tema_rengi']}}}.stButton>button{{background:{u_info['tema_rengi']};color:white}}</style>",
     unsafe_allow_html=True
 )
 
-# ------------------ SIDEBAR ------------------
+# ================== SIDEBAR ==================
 st.sidebar.title("🚀 ROTA AI")
-st.sidebar.metric(L["labels"]["rutbe"], mevcut_lakap_getir(u_info["level"], u_info["dil"]))
+st.sidebar.metric("Rütbe", mevcut_lakap(u_info["level"], u_info["dil"]))
 
-# -------- POMODORO (DÜZELTİLMİŞ) --------
+# -------- POMODORO --------
 with st.sidebar.container(border=True):
     st.write("⏱️ **POMODORO**")
 
     if st.session_state.pomo_aktif:
         kalan = int(st.session_state.pomo_bitis - time.time())
-
         if kalan <= 0:
             st.session_state.pomo_aktif = False
             st.session_state.pomo_bitis = None
             u_info["xp"] += 50
             u_info["pomo_count"] += 1
             veritabanini_kaydet(st.session_state.db)
-            st.toast("🎉 Pomodoro bitti +50 XP")
-
+            st.toast("🎉 Pomodoro tamamlandı (+50 XP)")
         else:
             m, s = divmod(kalan, 60)
             st.subheader(f"`{m:02d}:{s:02d}`")
@@ -184,17 +175,18 @@ with st.sidebar.container(border=True):
         st.subheader("`25:00`")
 
     c1, c2 = st.columns(2)
-    if c1.button("▶️"):
+    if c1.button("▶️ BAŞLAT"):
         st.session_state.pomo_aktif = True
         st.session_state.pomo_bitis = time.time() + 25 * 60
         st.rerun()
 
-    if c2.button("⏸️"):
+    if c2.button("⏸️ DURDUR"):
         st.session_state.pomo_aktif = False
         st.session_state.pomo_bitis = None
         st.rerun()
 
-menu = st.sidebar.radio("MENÜ", L["menu"])
+# ================== MENÜ ==================
+menu = st.sidebar.radio("MENÜ", ["🏠 Panel", "🤖 AI Mentor", "⚙️ Ayarlar"])
 
 if st.sidebar.button("🚪 ÇIKIŞ"):
     if os.path.exists(CONFIG_FILE):
@@ -202,15 +194,15 @@ if st.sidebar.button("🚪 ÇIKIŞ"):
     st.session_state.user = None
     st.rerun()
 
-# ------------------ SAYFALAR ------------------
-if menu in ["🏠 Panel", "🏠 Dashboard"]:
+# ================== SAYFALAR ==================
+if menu == "🏠 Panel":
     st.title(f"Hoş geldin {st.session_state.user}")
 
     if not u_info["data"].empty:
         st.plotly_chart(
             go.Figure([
                 go.Bar(x=u_info["data"]["Görev"], y=u_info["data"]["Hedef"], name="Hedef"),
-                go.Bar(x=u_info["data"]["Görev"], y=u_info["data"]["Yapılan"], name="Yapılan")
+                go.Bar(x=u_info["data"]["Görev"], y=u_info["data"]["Yapılan"], name="Yapılan"),
             ]),
             use_container_width=True
         )
@@ -222,9 +214,9 @@ elif menu == "🤖 AI Mentor":
         res = genai.GenerativeModel("gemini-1.5-flash").generate_content(q).text
         st.write(res)
 
-elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
+elif menu == "⚙️ Ayarlar":
     st.title("⚙️ Ayarlar")
-    renk = st.color_picker("Tema", TEMA)
+    renk = st.color_picker("Tema Rengi", u_info["tema_rengi"])
     if st.button("Kaydet"):
         u_info["tema_rengi"] = renk
         veritabanini_kaydet(st.session_state.db)
