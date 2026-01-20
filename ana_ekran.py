@@ -29,21 +29,28 @@ LAKAPLAR = {
 
 # ---------------- DB ----------------
 def get_db():
-    return sqlite3.connect("rota_v4.db", check_same_thread=False)
+    return sqlite3.connect("rota.db", check_same_thread=False)
 
 def init_db():
     db = get_db()
     c = db.cursor()
-    # theme_color sütunu eklendi
+    # Kullanıcılar tablosu
     c.execute("""
     CREATE TABLE IF NOT EXISTS users (
         username TEXT PRIMARY KEY,
         password BLOB,
         xp INTEGER DEFAULT 0,
-        pomo INTEGER DEFAULT 0,
-        theme_color TEXT DEFAULT '#FF4B4B'
+        pomo INTEGER DEFAULT 0
     )
     """)
+    
+    # EKSİK SÜTUN KONTROLÜ (Migration)
+    # Eğer veritabanın zaten varsa ve theme_color yoksa ekler
+    try:
+        c.execute("ALTER TABLE users ADD COLUMN theme_color TEXT DEFAULT '#FF4B4B'")
+    except:
+        pass # Sütun zaten varsa hata verir, geçiyoruz.
+
     c.execute("""
     CREATE TABLE IF NOT EXISTS tasks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,15 +78,19 @@ def get_lakap(level):
         if level >= k: out = LAKAPLAR[k]
     return out
 
-# TEMA UYGULAYICI FONKSİYON
 def apply_theme(color):
     st.markdown(f"""
         <style>
+        /* Ana butonlar */
         .stButton>button {{ background-color: {color}; color: white; border-radius: 8px; border: none; }}
-        .stTextInput>div>div>input {{ border-color: {color}; }}
+        /* Form butonları */
+        [data-testid="stFormSubmitButton"]>button {{ background-color: {color}; color: white; width: 100%; }}
+        /* Sidebar başlıkları ve ikonları */
         h1, h2, h3 {{ color: {color} !important; }}
+        /* Progress Bar */
         .stProgress > div > div > div > div {{ background-color: {color}; }}
-        [data-testid="stSidebar"] {{ border-right: 1px solid {color}; }}
+        /* Sidebar kenarlığı */
+        [data-testid="stSidebar"] {{ border-right: 2px solid {color}; }}
         </style>
         """, unsafe_allow_html=True)
 
@@ -94,11 +105,10 @@ def ai_call(prompt):
 if "user" not in st.session_state:
     st.session_state.user = None
 
-# ---------------- LOGIN / REGISTER ----------------
+# ---------------- LOGIN ----------------
 if not st.session_state.user:
     st.title("🚀 ROTA AI")
     t1, t2 = st.tabs(["Giriş", "Kayıt"])
-
     with t1:
         u = st.text_input("Kullanıcı")
         p = st.text_input("Şifre", type="password")
@@ -111,7 +121,6 @@ if not st.session_state.user:
                 st.session_state.user = u
                 st.rerun()
             else: st.error("Hatalı giriş")
-
     with t2:
         nu = st.text_input("Yeni Kullanıcı")
         np = st.text_input("Yeni Şifre", type="password")
@@ -130,9 +139,10 @@ u = st.session_state.user
 db = get_db()
 c = db.cursor()
 
-# KULLANICI RENK TERCİHİNİ ÇEK VE UYGULA
+# Kullanıcı rengini çek
 c.execute("SELECT xp, pomo, theme_color FROM users WHERE username=?", (u,))
-xp, pomo, user_color = c.fetchone()
+res = c.fetchone()
+xp, pomo, user_color = res
 apply_theme(user_color)
 
 level = calc_level(xp)
@@ -161,7 +171,7 @@ if menu == "🏠 Panel":
     df = pd.read_sql("SELECT * FROM tasks WHERE username=?", db, params=(u,))
     if not df.empty:
         fig = go.Figure()
-        fig.add_bar(x=df["gorev"], y=df["hedef"], name="Hedef", marker_color="gray")
+        fig.add_bar(x=df["gorev"], y=df["hedef"], name="Hedef", marker_color="#E0E0E0")
         fig.add_bar(x=df["gorev"], y=df["yapilan"], name="Yapılan", marker_color=user_color)
         st.plotly_chart(fig, use_container_width=True)
 
@@ -206,13 +216,15 @@ elif menu == "🤖 AI Mentor":
 elif menu == "⚙️ Ayarlar":
     st.title("⚙️ Ayarlar")
     
-    st.subheader("🎨 Tema Özelleştirme")
-    new_color = st.color_picker("Uygulama Rengini Seç", user_color)
+    st.subheader("🎨 Tema Rengi")
+    # Veritabanındaki mevcut rengi başlangıç değeri yapıyoruz
+    new_color = st.color_picker("Bir renk seçin", user_color)
     
-    if st.button("Temayı Kaydet"):
+    if st.button("Rengi Uygula ve Kaydet"):
         c.execute("UPDATE users SET theme_color=? WHERE username=?", (new_color, u))
         db.commit()
-        st.success("Tema başarıyla güncellendi!")
+        st.success("Yeni renk başarıyla kaydedildi!")
+        time.sleep(1)
         st.rerun()
         
     st.divider()
