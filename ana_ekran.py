@@ -29,17 +29,19 @@ LAKAPLAR = {
 
 # ---------------- DB ----------------
 def get_db():
-    return sqlite3.connect("rota.db", check_same_thread=False)
+    return sqlite3.connect("rota_v4.db", check_same_thread=False)
 
 def init_db():
     db = get_db()
     c = db.cursor()
+    # theme_color sütunu eklendi
     c.execute("""
     CREATE TABLE IF NOT EXISTS users (
         username TEXT PRIMARY KEY,
         password BLOB,
         xp INTEGER DEFAULT 0,
-        pomo INTEGER DEFAULT 0
+        pomo INTEGER DEFAULT 0,
+        theme_color TEXT DEFAULT '#FF4B4B'
     )
     """)
     c.execute("""
@@ -65,29 +67,24 @@ def calc_level(xp): return max(1, xp // XP_LEVEL_BASE + 1)
 
 def get_lakap(level):
     out = LAKAPLAR[1]
-    for k in LAKAPLAR:
+    for k in sorted(LAKAPLAR.keys()):
         if level >= k: out = LAKAPLAR[k]
     return out
 
+# TEMA UYGULAYICI FONKSİYON
+def apply_theme(color):
+    st.markdown(f"""
+        <style>
+        .stButton>button {{ background-color: {color}; color: white; border-radius: 8px; border: none; }}
+        .stTextInput>div>div>input {{ border-color: {color}; }}
+        h1, h2, h3 {{ color: {color} !important; }}
+        .stProgress > div > div > div > div {{ background-color: {color}; }}
+        [data-testid="stSidebar"] {{ border-right: 1px solid {color}; }}
+        </style>
+        """, unsafe_allow_html=True)
+
 def mentor_prompt(df, soru, level):
-    return f"""
-Sen deneyimli bir akademik koçsun.
-
-KULLANICI SEVİYESİ: {level}
-
-VERİ:
-{df}
-
-İSTEK:
-1. Güçlü yönler
-2. Zayıf yönler
-3. Haftalık net çalışma planı
-4. Somut aksiyonlar
-5. Soruya kısa ve net cevap
-
-SORU:
-{soru}
-"""
+    return f"Sen bir akademik koçsun. Seviye: {level}. Veriler: {df}. Soru: {soru}"
 
 def ai_call(prompt):
     model = genai.GenerativeModel("gemini-1.5-flash")
@@ -97,7 +94,7 @@ def ai_call(prompt):
 if "user" not in st.session_state:
     st.session_state.user = None
 
-# ---------------- LOGIN ----------------
+# ---------------- LOGIN / REGISTER ----------------
 if not st.session_state.user:
     st.title("🚀 ROTA AI")
     t1, t2 = st.tabs(["Giriş", "Kayıt"])
@@ -113,8 +110,7 @@ if not st.session_state.user:
             if r and check_pw(p, r[0]):
                 st.session_state.user = u
                 st.rerun()
-            else:
-                st.error("Hatalı giriş")
+            else: st.error("Hatalı giriş")
 
     with t2:
         nu = st.text_input("Yeni Kullanıcı")
@@ -123,54 +119,50 @@ if not st.session_state.user:
             db = get_db()
             c = db.cursor()
             try:
-                c.execute("INSERT INTO users VALUES (?, ?, 0, 0)", (nu, hash_pw(np)))
+                c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (nu, hash_pw(np)))
                 db.commit()
                 st.success("Kayıt başarılı")
-            except:
-                st.error("Kullanıcı var")
-
+            except: st.error("Kullanıcı var")
     st.stop()
 
+# ---------------- LOGGED IN ----------------
 u = st.session_state.user
 db = get_db()
 c = db.cursor()
 
-# ---------------- SIDEBAR ----------------
-c.execute("SELECT xp, pomo FROM users WHERE username=?", (u,))
-xp, pomo = c.fetchone()
+# KULLANICI RENK TERCİHİNİ ÇEK VE UYGULA
+c.execute("SELECT xp, pomo, theme_color FROM users WHERE username=?", (u,))
+xp, pomo, user_color = c.fetchone()
+apply_theme(user_color)
+
 level = calc_level(xp)
 
+# ---------------- SIDEBAR ----------------
 st.sidebar.title("🚀 ROTA AI")
 st.sidebar.metric("Rütbe", get_lakap(level))
 st.sidebar.metric("Seviye", level)
 st.sidebar.metric("XP", xp)
 
-menu = st.sidebar.radio(
-    "Menü",
-    ["🏠 Panel", "⏱️ Odak", "🤖 AI Mentor", "⚙️ Ayarlar"]
-)
+menu = st.sidebar.radio("Menü", ["🏠 Panel", "⏱️ Odak", "🤖 AI Mentor", "⚙️ Ayarlar"])
 
 # ---------------- PANEL ----------------
 if menu == "🏠 Panel":
     st.title("🏠 Görevler")
-
     with st.form("ekle"):
         g = st.text_input("Görev")
         h = st.number_input("Hedef", 1)
         b = st.text_input("Birim", "Soru")
         if st.form_submit_button("Ekle"):
-            c.execute(
-                "INSERT INTO tasks (username, gun, gorev, hedef, birim, yapilan) VALUES (?, ?, ?, ?, ?, 0)",
-                (u, datetime.now().strftime("%d/%m"), g, h, b)
-            )
+            c.execute("INSERT INTO tasks (username, gun, gorev, hedef, birim, yapilan) VALUES (?, ?, ?, ?, ?, 0)",
+                      (u, datetime.now().strftime("%d/%m"), g, h, b))
             db.commit()
             st.rerun()
 
     df = pd.read_sql("SELECT * FROM tasks WHERE username=?", db, params=(u,))
     if not df.empty:
         fig = go.Figure()
-        fig.add_bar(x=df["gorev"], y=df["hedef"], name="Hedef")
-        fig.add_bar(x=df["gorev"], y=df["yapilan"], name="Yapılan")
+        fig.add_bar(x=df["gorev"], y=df["hedef"], name="Hedef", marker_color="gray")
+        fig.add_bar(x=df["gorev"], y=df["yapilan"], name="Yapılan", marker_color=user_color)
         st.plotly_chart(fig, use_container_width=True)
 
         for _, r in df.iterrows():
@@ -194,9 +186,10 @@ elif menu == "⏱️ Odak":
             db.commit()
             del st.session_state.end
             st.balloons()
+            st.rerun()
         else:
             m, s = divmod(left, 60)
-            st.markdown(f"<h1>{m:02d}:{s:02d}</h1>", unsafe_allow_html=True)
+            st.markdown(f"<h1 style='text-align:center;'>{m:02d}:{s:02d}</h1>", unsafe_allow_html=True)
             time.sleep(1)
             st.rerun()
 
@@ -205,12 +198,24 @@ elif menu == "🤖 AI Mentor":
     st.title("🤖 Akademik Koç")
     msg = st.chat_input("Sorunu yaz")
     if msg:
-        df = pd.read_sql("SELECT gorev, hedef, yapilan FROM tasks WHERE username=?", db, params=(u,))
-        ans = ai_call(mentor_prompt(df.to_string(), msg, level))
+        tasks_df = pd.read_sql("SELECT gorev, hedef, yapilan FROM tasks WHERE username=?", db, params=(u,))
+        ans = ai_call(mentor_prompt(tasks_df.to_string(), msg, level))
         st.chat_message("assistant").write(ans)
 
 # ---------------- SETTINGS ----------------
 elif menu == "⚙️ Ayarlar":
+    st.title("⚙️ Ayarlar")
+    
+    st.subheader("🎨 Tema Özelleştirme")
+    new_color = st.color_picker("Uygulama Rengini Seç", user_color)
+    
+    if st.button("Temayı Kaydet"):
+        c.execute("UPDATE users SET theme_color=? WHERE username=?", (new_color, u))
+        db.commit()
+        st.success("Tema başarıyla güncellendi!")
+        st.rerun()
+        
+    st.divider()
     if st.button("ÇIKIŞ"):
         st.session_state.user = None
         st.rerun()
