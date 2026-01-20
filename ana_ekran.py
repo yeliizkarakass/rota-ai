@@ -200,10 +200,51 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
 
 elif menu in ["📊 Alışkanlıklar", "📊 Habits"]:
     st.title("📊 Alışkanlık Takip Sistemi")
-    h_df = pd.DataFrame(u_info.get('habits', []), columns=["Alışkanlık", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"])
-    edited_h = st.data_editor(h_df, num_rows="dynamic", use_container_width=True, hide_index=True)
-    if not h_df.equals(edited_h):
-        u_info['habits'] = edited_h.to_dict(orient='records'); veritabanini_kaydet(st.session_state.db)
+    
+    # 1. Veri Hazırlama: Eğer liste boşsa varsayılan bir alışkanlık oluşturur
+    habits_list = u_info.get('habits', [])
+    if not habits_list:
+        habits_list = [{"Alışkanlık": "05:30 Kalkış ⏰", "Pzt": False, "Sal": False, "Çar": False, "Per": False, "Cum": False, "Cmt": False, "Paz": False}]
+    
+    h_df = pd.DataFrame(habits_list)
+
+    # 2. Düzenleme Alanı: Kullanıcı buradan tik atar veya yeni satır ekler
+    st.info("💡 Tabloya yeni alışkanlıklar ekleyebilir veya günlerin üzerine tıklayarak tik atabilirsiniz.")
+    e_habits = st.data_editor(
+        h_df, 
+        num_rows="dynamic", 
+        use_container_width=True, 
+        hide_index=True, 
+        key="h_editor_main"
+    )
+
+    # 3. Veritabanına Kaydetme: Eğer tabloda bir değişiklik yapılırsa anında JSON'a yazar
+    if not h_df.equals(e_habits):
+        u_info['habits'] = e_habits.to_dict(orient='records')
+        veritabanini_kaydet(st.session_state.db)
+        st.rerun()
+
+    st.divider() # İstediğin ayırıcı çizgi ✨
+
+    # 4. Görsel Takipçi (Progress Bar): Tik sayısına göre yüzde hesaplar
+    st.subheader("📈 Haftalık İlerleme Durumu")
+    
+    # Her bir alışkanlık satırı için döngü
+    for _, row in e_habits.iterrows():
+        # Satırdaki True (seçili) değerlerin sayısını bulur
+        tik_sayisi = sum([1 for gun in ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"] if row.get(gun, False) is True])
+        
+        c_h1, c_h2 = st.columns([3, 7])
+        
+        with c_h1:
+            st.markdown(f"**{row['Alışkanlık']}**")
+        
+        with c_h2:
+            # İlerleme çubuğu (Yüzde üzerinden)
+            yuzde = tik_sayisi / 7
+            bar_text = f"⭐ %{int(yuzde * 100)}"
+            st.progress(yuzde, text=bar_text)
+
 
 elif menu in ["📅 Sınavlar", "📅 Exams"]:
     st.title(L["basliklar"]["sinavlar"])
