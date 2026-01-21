@@ -130,6 +130,17 @@ menu = st.sidebar.radio("NAVİGASYON", L["menu"])
 # --- PANEL ---
 if menu in ["🏠 Panel", "🏠 Dashboard"]:
     st.title(f"✨ {u_info.get('ana_hedef', 'Öğrenci').upper()}")
+    
+    # HATA ÖNLEYİCİ: Eğer data boşsa veya sütunlar eksikse düzelt
+    if not isinstance(u_info['data'], pd.DataFrame) or u_info['data'].empty:
+        u_info['data'] = pd.DataFrame(columns=['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan'])
+    
+    # Sütun kontrolü yap (KeyError'u engelleyen kısım)
+    required_columns = ['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan']
+    for col in required_columns:
+        if col not in u_info['data'].columns:
+            u_info['data'][col] = "" if col != 'Yapılan' else 0
+
     if not u_info['data'].empty:
         c1, c2 = st.columns([2, 1])
         with c1:
@@ -145,24 +156,34 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
     gunler = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
     for g in gunler:
         with st.expander(f"📅 {g.upper()}"):
-            mask = u_info['data']['Gün'] == g
-            temp_df = u_info['data'][mask]
+            # Maskeleme yaparken KeyError almamak için güvenli filtreleme
+            temp_df = u_info['data'][u_info['data']['Gün'] == g]
+            
             for idx, row in temp_df.iterrows():
                 cc1, cc2, cc3 = st.columns([3, 2, 1])
                 cc1.write(f"**{row['Görev']}**")
                 y_v = cc2.number_input(f"{row['Birim']}", value=int(row['Yapılan']), key=f"p_{idx}")
                 if y_v != row['Yapılan']:
                     u_info['data'].at[idx, 'Yapılan'] = y_v
-                    u_info['xp'] += 20; veritabanini_kaydet(st.session_state.db); st.rerun()
+                    u_info['xp'] += 20
+                    veritabanini_kaydet(st.session_state.db)
+                    st.rerun()
                 if cc3.button("🗑️", key=f"del_g_{idx}"):
                     u_info['data'] = u_info['data'].drop(idx).reset_index(drop=True)
-                    veritabanini_kaydet(st.session_state.db); st.rerun()
+                    veritabanini_kaydet(st.session_state.db)
+                    st.rerun()
+            
             with st.form(f"f_{g}", clear_on_submit=True):
                 c_a, c_b, c_c = st.columns([2, 1, 1])
-                ng, nh, nb = c_a.text_input("Görev"), c_b.number_input("Hedef", 1), c_c.selectbox("Birim", ["Soru", "Saat", "Sayfa"])
+                ng = c_a.text_input("Görev")
+                nh = c_b.number_input("Hedef", min_value=1)
+                nb = c_c.selectbox("Birim", ["Soru", "Saat", "Sayfa"])
                 if st.form_submit_button("Ekle"):
-                    u_info['data'] = pd.concat([u_info['data'], pd.DataFrame([{'Gün': g, 'Görev': ng, 'Hedef': nh, 'Birim': nb, 'Yapılan': 0}])], ignore_index=True)
-                    veritabanini_kaydet(st.session_state.db); st.rerun()
+                    if ng:
+                        new_row = pd.DataFrame([{'Gün': g, 'Görev': ng, 'Hedef': nh, 'Birim': nb, 'Yapılan': 0}])
+                        u_info['data'] = pd.concat([u_info['data'], new_row], ignore_index=True)
+                        veritabanini_kaydet(st.session_state.db)
+                        st.rerun()
 
     st.divider()
     st.subheader(L["basliklar"]["aliskanlik"])
@@ -173,11 +194,13 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
     if not h_df.equals(edited_h):
         u_info['habits'] = edited_h.to_dict(orient='records')
         veritabanini_kaydet(st.session_state.db)
+    
     for _, row in edited_h.iterrows():
         tik = sum([1 for gun in ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"] if row.get(gun, False) is True])
         c_h1, c_h2 = st.columns([1, 3])
         c_h1.caption(f"**{row['Alışkanlık']}**")
         c_h2.progress(tik / 7, text=f"%{int((tik/7)*100)}")
+
 
 # --- ODAK ---
 elif menu in ["⏱️ Odak", "⏱️ Focus"]:
