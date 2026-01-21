@@ -347,8 +347,6 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
                         veritabanini_kaydet(st.session_state.db)
                         st.rerun()
 
-
-
 # --- BAŞARILAR ---
 elif menu in ["🏆 Başarılar", "🏆 Achievements"]:
     st.title(L["basliklar"]["basari"])
