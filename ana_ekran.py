@@ -1,3 +1,12 @@
+import streamlit as st
+import pandas as pd
+from datetime import datetime
+import plotly.graph_objects as go
+import json
+import os
+import google.generativeai as genai
+import time
+import uuid
 # --- 1. VERİ YÖNETİMİ GÜNCELLEME ---
 def veritabanini_yukle():
     if os.path.exists(DB_FILE):
