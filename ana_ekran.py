@@ -177,7 +177,7 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
                 c_a, c_b, c_c = st.columns([2, 1, 1])
                 ng = c_a.text_input("Görev")
                 nh = c_b.number_input("Hedef", min_value=1)
-                nb = c_c.selectbox("Birim", ["Soru", "Saat", "Sayfa"])
+                nb = c_c.selectbox("Birim", ["Soru", "Saat", "Konu"])
                 if st.form_submit_button("Ekle"):
                     if ng:
                         new_row = pd.DataFrame([{'Gün': g, 'Görev': ng, 'Hedef': nh, 'Birim': nb, 'Yapılan': 0}])
