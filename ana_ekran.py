@@ -253,25 +253,62 @@ elif menu in ["📅 Sınavlar", "📅 Exams"]:
 # --- AKADEMİK ---
 elif menu in ["🎓 Akademik", "🎓 Academic"]:
     st.title(L["basliklar"]["akademik"])
+    
+    # Harf notu katsayıları
+    HARF_KATSY = {
+        "AA": 4.0, "BA": 3.5, "BB": 3.0, "CB": 2.5, 
+        "CC": 2.0, "DC": 1.5, "DD": 1.0, "FD": 0.5, "FF": 0.0
+    }
+
     tab1, tab2 = st.tabs(["📊 GNO Hesapla", "📉 Devamsızlık"])
+    
     with tab1:
         st.subheader("📌 Mevcut Akademik Veriler")
         gc1, gc2 = st.columns(2)
         m_gno = gc1.number_input("Genel Ortalama (GNO)", 0.0, 4.0, float(u_info.get('mevcut_gno', 0.0)))
         m_kr = gc2.number_input("Toplam Kredi", 0, 300, int(u_info.get('toplam_kredi', 0)))
+        
         st.subheader("📚 Dönem Dersleri")
-        gpa_df = pd.DataFrame(u_info.get('gpa_list', []), columns=["Ders", "Kredi", "Not"])
-        edited_gpa = st.data_editor(gpa_df, num_rows="dynamic", use_container_width=True)
+        
+        # DataFrame yapısını harf notuna göre güncelliyoruz
+        # Eğer u_info içinde eski sayısal notlar varsa hata vermemesi için sütun adını 'Harf Notu' yapıyoruz
+        gpa_df = pd.DataFrame(u_info.get('gpa_list', []), columns=["Ders", "Kredi", "Harf Notu"])
+        
+        edited_gpa = st.data_editor(
+            gpa_df, 
+            num_rows="dynamic", 
+            use_container_width=True,
+            column_config={
+                "Harf Notu": st.column_config.SelectboxColumn(
+                    "Harf Notu",
+                    options=list(HARF_KATSY.keys()),
+                    required=True,
+                )
+            }
+        )
+        
         if st.button("Kaydet ve Hesapla"):
             u_info['mevcut_gno'], u_info['toplam_kredi'] = m_gno, m_kr
             u_info['gpa_list'] = edited_gpa.to_dict(orient='records')
+            
             dk = edited_gpa['Kredi'].sum()
-            dp = (edited_gpa['Kredi'] * edited_gpa['Not']).sum()
-            y_gno = ((m_gno * m_kr) + dp) / (m_kr + dk) if (m_kr + dk) > 0 else 0
-            st.success(f"Dönem Ortalaması: {dp/dk if dk > 0 else 0:.2f} | Yeni GNO: {y_gno:.2f}")
+            
+            # Harf notlarını katsayıya çevirip toplam puanı hesaplama
+            dp = 0
+            for _, row in edited_gpa.iterrows():
+                katsayi = HARF_KATSY.get(row['Harf Notu'], 0)
+                dp += (row['Kredi'] * katsayi)
+            
+            # Yeni GNO Formülü: ((Eski GNO * Eski Kredi) + Dönem Puanı) / Toplam Kredi
+            toplam_yeni_kredi = m_kr + dk
+            y_gno = ((m_gno * m_kr) + dp) / toplam_yeni_kredi if toplam_yeni_kredi > 0 else 0
+            d_ort = dp / dk if dk > 0 else 0
+            
+            st.success(f"Dönem Ortalaması: {d_ort:.2f} | Yeni GNO: {y_gno:.2f}")
             veritabanini_kaydet(st.session_state.db)
             
     with tab2:
+        # Devamsızlık kısmı aynı kalabilir, burayı değiştirmene gerek yok
         st.subheader("📉 Devamsızlık Takibi")
         with st.expander("➕ Yeni Ders Ekle"):
             with st.form("yeni_ders_form", clear_on_submit=True):
@@ -304,6 +341,7 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
                         u_info['attendance'].pop(idx)
                         veritabanini_kaydet(st.session_state.db)
                         st.rerun()
+
 
 # --- BAŞARILAR ---
 elif menu in ["🏆 Başarılar", "🏆 Achievements"]:
