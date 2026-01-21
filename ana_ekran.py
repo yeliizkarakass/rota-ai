@@ -233,6 +233,89 @@ elif menu in ["📅 Sınavlar", "📅 Exams"]:
             if sc3.button("Sil", key=f"ex_s_{i}"):
                 u_info['sinavlar'].pop(i); veritabanini_kaydet(st.session_state.db); st.rerun()
 
+# --- AKADEMİK ---
+elif menu in ["🎓 Akademik", "🎓 Academic"]:
+    st.title(L["basliklar"]["akademik"])
+    tab1, tab2 = st.tabs(["📊 GNO Hesapla", "📉 Devamsızlık"])
+    with tab1:
+        st.subheader("📌 Mevcut Akademik Veriler")
+        gc1, gc2 = st.columns(2)
+        m_gno = gc1.number_input("Genel Ortalama (GNO)", 0.0, 4.0, float(u_info.get('mevcut_gno', 0.0)))
+        m_kr = gc2.number_input("Toplam Kredi", 0, 300, int(u_info.get('toplam_kredi', 0)))
+        
+        st.subheader("📚 Dönem Dersleri")
+        gpa_df = pd.DataFrame(u_info.get('gpa_list', []), columns=["Ders", "Kredi", "Not"])
+        edited_gpa = st.data_editor(gpa_df, num_rows="dynamic", use_container_width=True)
+        
+        if st.button("Kaydet ve Hesapla"):
+            u_info['mevcut_gno'], u_info['toplam_kredi'] = m_gno, m_kr
+            u_info['gpa_list'] = edited_gpa.to_dict(orient='records')
+            dk = edited_gpa['Kredi'].sum()
+            dp = (edited_gpa['Kredi'] * edited_gpa['Not']).sum()
+            y_gno = ((m_gno * m_kr) + dp) / (m_kr + dk) if (m_kr + dk) > 0 else 0
+            st.success(f"Dönem Ortalaması: {dp/dk if dk > 0 else 0:.2f} | Yeni GNO: {y_gno:.2f}")
+            veritabanini_kaydet(st.session_state.db) 
+
+    with tab2:
+        att_df = pd.DataFrame(u_info.get('attendance', []), columns=["Ders", "Limit", "Kaçırılan"])
+        edited_att = st.data_editor(att_df, num_rows="dynamic", use_container_width=True)
+        if st.button("Kaydet"):
+            u_info['attendance'] = edited_att.to_dict(orient='records'); veritabanini_kaydet(st.session_state.db) bunun gibi odak bitince xp kazandiran turden
+# --- BAŞARILAR ---
+elif menu in ["🏆 Başarılar", "🏆 Achievements"]:
+    st.title(L["basliklar"]["basari"])
+    
+    # Üst Bilgi Kartları
+    c1, c2, c3 = st.columns(3)
+    current_xp = u_info.get('xp', 0)
+    current_level = u_info.get('level', 1)
+    pomo_total = u_info.get('pomo_count', 0)
+    
+    with c1:
+        st.metric("✨ Toplam XP", f"{current_xp}")
+    with c2:
+        st.metric("🆙 Seviye", f"{current_level}")
+    with c3:
+        st.metric("🔥 Odak Seansları", f"{pomo_total}")
+
+    # Seviye İlerleme Çubuğu
+    xp_for_next_level = 500
+    progress_val = (current_xp % xp_for_next_level) / xp_for_next_level
+    st.write(f"**Sonraki Seviye İlerlemesi:** {current_xp % xp_for_next_level} / {xp_for_next_level} XP")
+    st.progress(progress_val)
+    
+    st.divider()
+    
+    # Rozetler (Achievements) Bölümü
+    st.subheader("🏅 Kazanılan Rozetler")
+    
+    # Rozet kriterlerini belirleyelim
+    rozetler = [
+        {"isim": "Yolun Başında", "sart": current_xp >= 100, "ikon": "🌱", "mesaj": "100 XP Barajını Aştın!"},
+        {"isim": "Odak Ustası", "sart": pomo_total >= 5, "ikon": "🎯", "mesaj": "5 Başarılı Odak Seansı!"},
+        {"isim": "Disiplinli", "sart": current_level >= 3, "ikon": "📜", "mesaj": "3. Seviyeye Ulaştın!"},
+        {"isim": "Gece Kuşu", "sart": current_xp >= 1000, "ikon": "🦉", "mesaj": "1000 XP Topladın!"},
+        {"isim": "Zirve Mimarı", "sart": pomo_total >= 20, "ikon": "🏔️", "mesaj": "20 Odak Seansı Tamamlandı!"},
+        {"isim": "Efsane", "sart": current_level >= 10, "ikon": "🌟", "mesaj": "10. Seviyeye Ulaştın!"}
+    ]
+    
+    # Rozetleri 3'lü sütunlar halinde gösterelim
+    cols = st.columns(3)
+    for i, r in enumerate(rozetler):
+        with cols[i % 3]:
+            if r["sart"]:
+                st.success(f"### {r['ikon']}\n**{r['isim']}**\n\n{r['mesaj']}")
+            else:
+                st.info(f"### 🔒\n**{r['isim']}**\n\n*Kilitli*")
+
+    st.divider()
+    
+    # İstatistiksel Özet
+    with st.expander("📊 Detaylı XP İstatistikleri"):
+        st.write(f"Tamamlanan Görevlerden Gelen Tahmini XP: {len(u_info.get('data', [])) * 20}")
+        st.write(f"Odak Seanslarından Gelen XP: {pomo_total * 100}")
+        st.info("İpucu: Her görev tamamlama 20 XP, her odak seansı (Pomodoro) 100 XP kazandırır!")
+
 # --- AI MENTOR ---
 elif menu in ["🤖 AI Mentor"]:
     st.title(L["basliklar"]["mentor"])
