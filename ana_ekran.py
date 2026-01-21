@@ -232,69 +232,105 @@ elif menu in ["📅 Sınavlar", "📅 Exams"]:
 elif menu in ["🎓 Akademik", "🎓 Academic"]:
     st.title(L["basliklar"]["akademik"])
     tab1, tab2 = st.tabs(["📊 GNO Hesapla", "📉 Devamsızlık"])
+    
     with tab1:
         st.subheader("📌 Mevcut Akademik Veriler")
         gc1, gc2 = st.columns(2)
-        m_gno = gc1.number_input("Genel Ortalama (GNO)", 0.0, 4.0, float(u_info.get('mevcut_gno', 0.0)))
-        m_kr = gc2.number_input("Toplam Kredi", 0, 300, int(u_info.get('toplam_kredi', 0)))
+        # Verilerin güvenli bir şekilde çekilmesi ve float/int dönüşümleri
+        m_gno = gc1.number_input("Genel Ortalama (GNO)", 0.0, 4.0, float(u_info.get('mevcut_gno', 0.0)), step=0.01)
+        m_kr = gc2.number_input("Tamamlanan Toplam Kredi", 0, 500, int(u_info.get('toplam_kredi', 0)))
         
         st.subheader("📚 Dönem Dersleri")
-        gpa_df = pd.DataFrame(u_info.get('gpa_list', []), columns=["Ders", "Kredi", "Not"])
-        edited_gpa = st.data_editor(gpa_df, num_rows="dynamic", use_container_width=True)
+        # gpa_list kontrolü
+        if 'gpa_list' not in u_info or not isinstance(u_info['gpa_list'], list):
+            u_info['gpa_list'] = []
+            
+        gpa_df = pd.DataFrame(u_info['gpa_list'], columns=["Ders", "Kredi", "Not"])
+        if gpa_df.empty:
+            gpa_df = pd.DataFrame([{"Ders": "Örn: Diferansiyel Denklemler", "Kredi": 5, "Not": 3.5}])
+            
+        edited_gpa = st.data_editor(gpa_df, num_rows="dynamic", use_container_width=True, key="gpa_editor")
         
         if st.button("Kaydet ve Hesapla"):
-            u_info['mevcut_gno'], u_info['toplam_kredi'] = m_gno, m_kr
-            u_info['gpa_list'] = edited_gpa.to_dict(orient='records')
-            dk = edited_gpa['Kredi'].sum()
-            dp = (edited_gpa['Kredi'] * edited_gpa['Not']).sum()
-            y_gno = ((m_gno * m_kr) + dp) / (m_kr + dk) if (m_kr + dk) > 0 else 0
-            st.success(f"Dönem Ortalaması: {dp/dk if dk > 0 else 0:.2f} | Yeni GNO: {y_gno:.2f}")
+            # Sayısal değerlerin güvenli hesaplanması
+            valid_df = edited_gpa.dropna()
+            valid_df['Kredi'] = pd.to_numeric(valid_df['Kredi'], errors='coerce').fillna(0)
+            valid_df['Not'] = pd.to_numeric(valid_df['Not'], errors='coerce').fillna(0)
+            
+            dk = valid_df['Kredi'].sum()
+            dp = (valid_df['Kredi'] * valid_df['Not']).sum()
+            
+            # Dönem ortalaması
+            d_ort = dp / dk if dk > 0 else 0.0
+            
+            # Yeni Genel Ortalama (Ağırlıklı Ortalama Mantığı)
+            toplam_eski_puan = m_gno * m_kr
+            yeni_toplam_kredi = m_kr + dk
+            yeni_gno = (toplam_eski_puan + dp) / yeni_toplam_kredi if yeni_toplam_kredi > 0 else 0.0
+            
+            # Veritabanına yazma
+            u_info['mevcut_gno'] = m_gno
+            u_info['toplam_kredi'] = m_kr
+            u_info['gpa_list'] = valid_df.to_dict(orient='records')
+            
             veritabanini_kaydet(st.session_state.db)
+            st.success(f"Dönem Ortalaması: {d_ort:.2f} | Yeni Genel GNO: {yeni_gno:.2f}")
 
     with tab2:
-        att_df = pd.DataFrame(u_info.get('attendance', []), columns=["Ders", "Limit", "Kaçırılan"])
-        edited_att = st.data_editor(att_df, num_rows="dynamic", use_container_width=True)
-        if st.button("Kaydet"):
-            u_info['attendance'] = edited_att.to_dict(orient='records'); veritabanini_kaydet(st.session_state.db)
+        st.subheader("📉 Devamsızlık Takibi")
+        if 'attendance' not in u_info: u_info['attendance'] = []
+        att_df = pd.DataFrame(u_info['attendance'], columns=["Ders", "Limit", "Kaçırılan"])
+        if att_df.empty:
+            att_df = pd.DataFrame([{"Ders": "Devre Analizi", "Limit": 4, "Kaçırılan": 0}])
+            
+        edited_att = st.data_editor(att_df, num_rows="dynamic", use_container_width=True, key="att_editor")
+        if st.button("Devamsızlık Verilerini Kaydet"):
+            u_info['attendance'] = edited_att.dropna().to_dict(orient='records')
+            veritabanini_kaydet(st.session_state.db)
+            st.success("Devamsızlık bilgileri güncellendi!")
+
 # --- BAŞARILAR ---
 elif menu in ["🏆 Başarılar", "🏆 Achievements"]:
     st.title(L["basliklar"]["basari"])
     
+    # Veri kontrolleri
+    current_xp = int(u_info.get('xp', 0))
+    pomo_total = int(u_info.get('pomo_count', 0))
+    # Seviye otomatik hesaplanıyor (Her 500 XP'de bir)
+    current_level = (current_xp // 500) + 1
+    
     # Üst Bilgi Kartları
     c1, c2, c3 = st.columns(3)
-    current_xp = u_info.get('xp', 0)
-    current_level = u_info.get('level', 1)
-    pomo_total = u_info.get('pomo_count', 0)
-    
     with c1:
         st.metric("✨ Toplam XP", f"{current_xp}")
     with c2:
         st.metric("🆙 Seviye", f"{current_level}")
     with c3:
-        st.metric("🔥 Odak Seansları", f"{pomo_total}")
+        # Mevcut rütbeyi hesapla
+        temp_rütbe = LAKAPLAR[1][dil]
+        for k in sorted(LAKAPLAR.keys()):
+            if current_level >= k: temp_rütbe = LAKAPLAR[k][dil]
+        st.metric("🎖️ Rütbe", temp_rütbe)
 
-    # Seviye İlerleme Çubuğu
-    xp_for_next_level = 500
-    progress_val = (current_xp % xp_for_next_level) / xp_for_next_level
-    st.write(f"**Sonraki Seviye İlerlemesi:** {current_xp % xp_for_next_level} / {xp_for_next_level} XP")
-    st.progress(progress_val)
+    # İlerleme Çubuğu
+    xp_limit = 500
+    current_progress_xp = current_xp % xp_limit
+    st.write(f"**Sonraki Seviye İlerlemesi:** {current_progress_xp} / {xp_limit} XP")
+    st.progress(current_progress_xp / xp_limit)
     
     st.divider()
     
-    # Rozetler (Achievements) Bölümü
+    # Rozetler Sistemi
     st.subheader("🏅 Kazanılan Rozetler")
-    
-    # Rozet kriterlerini belirleyelim
     rozetler = [
-        {"isim": "Yolun Başında", "sart": current_xp >= 100, "ikon": "🌱", "mesaj": "100 XP Barajını Aştın!"},
-        {"isim": "Odak Ustası", "sart": pomo_total >= 5, "ikon": "🎯", "mesaj": "5 Başarılı Odak Seansı!"},
-        {"isim": "Disiplinli", "sart": current_level >= 3, "ikon": "📜", "mesaj": "3. Seviyeye Ulaştın!"},
-        {"isim": "Gece Kuşu", "sart": current_xp >= 1000, "ikon": "🦉", "mesaj": "1000 XP Topladın!"},
-        {"isim": "Zirve Mimarı", "sart": pomo_total >= 20, "ikon": "🏔️", "mesaj": "20 Odak Seansı Tamamlandı!"},
-        {"isim": "Efsane", "sart": current_level >= 10, "ikon": "🌟", "mesaj": "10. Seviyeye Ulaştın!"}
+        {"isim": "Yolun Başında", "sart": current_xp >= 100, "ikon": "🌱", "mesaj": "100 XP'ye ulaştın!"},
+        {"isim": "Odak Ustası", "sart": pomo_total >= 5, "ikon": "🎯", "mesaj": "5 Odak seansı bitti!"},
+        {"isim": "Disiplinli", "sart": current_level >= 3, "ikon": "📜", "mesaj": "3. Seviye barajı aşıldı!"},
+        {"isim": "Mühendis Adayı", "sart": current_xp >= 1000, "ikon": "🛠️", "mesaj": "1000 XP topladın!"},
+        {"isim": "Zirve Mimarı", "sart": pomo_total >= 20, "ikon": "🏔️", "mesaj": "20 seans odaklandın!"},
+        {"isim": "Efsane", "sart": current_level >= 10, "ikon": "🌟", "mesaj": "10. Seviye bir efsanesin!"}
     ]
     
-    # Rozetleri 3'lü sütunlar halinde gösterelim
     cols = st.columns(3)
     for i, r in enumerate(rozetler):
         with cols[i % 3]:
@@ -303,7 +339,13 @@ elif menu in ["🏆 Başarılar", "🏆 Achievements"]:
             else:
                 st.info(f"### 🔒\n**{r['isim']}**\n\n*Kilitli*")
 
-    st.divider()
+    # XP Kazanma Rehberi
+    with st.expander("ℹ️ XP Nasıl Kazanılır?"):
+        st.write("""
+        - **Her Günlük Görev:** +20 XP
+        - **Her Odak (Pomodoro) Seansı:** +100 XP
+        - **Her 500 XP:** Yeni bir seviye ve rütbe!
+        """)
     
     # İstatistiksel Özet
     with st.expander("📊 Detaylı XP İstatistikleri"):
