@@ -1,106 +1,102 @@
-import streamlit as st
-import pandas as pd
-from datetime import datetime
-import plotly.graph_objects as go
-import json
-import os
-import google.generativeai as genai
-import time
-import uuid
-
-# --- 0. AYARLAR ---
-st.set_page_config(page_title="ROTA AI", page_icon="🚀", layout="wide")
-
-# --- 1. VERİ YÖNETİMİ ---
-DB_FILE = "rota_database.json"
-
-LAKAPLAR = {
-    1: {"TR": "Meraklı Yolcu 🚶", "EN": "Curious Traveler 🚶"},
-    4: {"TR": "Disiplin Kurucu 🏗️", "EN": "Discipline Builder 🏗️"},
-    8: {"TR": "Odak Ustası 🎯", "EN": "Focus Master 🎯"},
-    13: {"TR": "Strateji Dehası 🧠", "EN": "Strategy Genius 🧠"},
-    20: {"TR": "Vizyoner Lider 👑", "EN": "Visionary Leader 👑"},
-    36: {"TR": "Zirve Mimarı 🏔️", "EN": "Summit Architect 🏔️"},
-    50: {"TR": "Efsane 🌟", "EN": "Legend 🌟"}
-}
-
-DIL_PAKETI = {
-    "TR": {
-        "menu": ["🏠 Panel", "📅 Sınavlar", "⏱️ Odak", "🎓 Akademik", "🏆 Başarılar", "🤖 AI Mentor", "⚙️ Ayarlar"],
-        "butonlar": {"baslat": "🚀 BAŞLAT", "durdur": "⏸️ DURDUR", "sifirla": "🔄 SIFIRLA", "ekle": "Ekle", "kaydet": "Kaydet", "cikis": "🚪 ÇIKIŞ"},
-        "basliklar": {"takip": "📝 GÜNLÜK TAKİP", "onizleme": "🗓️ Haftalık Önizleme", "sinavlar": "📅 SINAV TAKVİMİ", "pomo": "⏱️ ODAK", "akademik": "🎓 AKADEMİK YÖNETİM", "aliskanlik": "📊 ALIŞKANLIK TAKİPÇİSİ", "basari": "🏆 BAŞARI KÜRSÜSÜ", "mentor": "🤖 AI AKADEMİK DANIŞMAN"},
-        "labels": {"hedef": "Hedef", "yapilan": "Yapılan", "birim": "Birim", "gorev": "Görev", "rutbe": "Rütbe", "tema": "Hızlı Tema"}
-    },
-    "EN": {
-        "menu": ["🏠 Dashboard", "📅 Exams", "⏱️ Focus", "🎓 Academic", "🏆 Achievements", "🤖 AI Mentor", "⚙️ Settings"],
-        "butonlar": {"baslat": "🚀 START", "durdur": "⏸️ PAUSE", "sifirla": "🔄 RESET", "ekle": "Add", "kaydet": "Save", "cikis": "🚪 LOGOUT"},
-        "basliklar": {"takip": "📝 DAILY TRACKING", "onizleme": "🗓️ Weekly Preview", "sinavlar": "📅 EXAM SCHEDULE", "pomo": "⏱️ FOCUS", "akademik": "🎓 ACADEMIC MANAGEMENT", "aliskanlik": "📊 HABIT TRACKER", "basari": "🏆 HALL OF FAME", "mentor": "🤖 AI ACADEMIC ADVISOR"},
-        "labels": {"hedef": "Target", "yapilan": "Done", "birim": "Unit", "gorev": "Task", "rutbe": "Rank", "tema": "Quick Theme"}
-    }
-}
-
+# --- 1. VERİ YÖNETİMİ GÜNCELLEME ---
 def veritabanini_yukle():
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 for u in data:
-                    defaults = {'password': '123', 'xp': 0, 'level': 1, 'ana_hedef': 'Öğrenci', 'sinavlar': [], 'notes': [], 'pomo_count': 0, 'dil': 'TR', 'habits': [], 'attendance': [], 'gpa_list': [], 'tema_rengi': '#4FACFE', 'egitim_duzeyi': 'Lisans', 'mevcut_gno': 0.0, 'toplam_kredi': 0}
+                    # Mevcut verileri koru, eksikleri tamamla
+                    defaults = {
+                        'password': '', 'xp': 0, 'level': 1, 'ana_hedef': 'Öğrenci', 
+                        'egitim_duzeyi': 'Lisans', 'sinavlar': [], 'notes': [], 
+                        'pomo_count': 0, 'dil': 'TR', 'habits': [], 'attendance': [], 
+                        'gpa_list': [], 'tema_rengi': '#4FACFE', 'mevcut_gno': 0.0, 'toplam_kredi': 0
+                    }
                     for k, v in defaults.items():
                         if k not in data[u]: data[u][k] = v
-                    if isinstance(data[u]['data'], list):
+                    
+                    # DataFrame dönüşümünü sağla
+                    if not isinstance(data[u]['data'], pd.DataFrame):
                         data[u]['data'] = pd.DataFrame(data[u]['data'])
-                    elif not isinstance(data[u]['data'], pd.DataFrame):
-                        data[u]['data'] = pd.DataFrame(columns=['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan'])
                 return data
-        except Exception: return {}
+        except: return {}
     return {}
 
 def veritabanini_kaydet(db):
     to_save = {}
     for u in db:
-        db[u]['level'] = (db[u].get('xp', 0) // 500) + 1
-        temp_user = db[u].copy()
-        if isinstance(temp_user['data'], pd.DataFrame):
-            temp_user['data'] = temp_user['data'].to_dict(orient='records')
-        to_save[u] = temp_user
+        user_data = db[u].copy()
+        # Seviye hesaplama
+        user_data['level'] = (user_data.get('xp', 0) // 500) + 1
+        # DataFrame'i JSON için listeye çevir
+        if isinstance(user_data['data'], pd.DataFrame):
+            user_data['data'] = user_data['data'].to_dict(orient='records')
+        to_save[u] = user_data
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(to_save, f, ensure_ascii=False, indent=4)
 
+# --- GİRİŞ & KAYIT SİSTEMİ ---
 if 'db' not in st.session_state: st.session_state.db = veritabanini_yukle()
-if 'pomo_kalan_saniye' not in st.session_state: st.session_state.pomo_kalan_saniye = 25 * 60
-if 'pomo_calisiyor' not in st.session_state: st.session_state.pomo_calisiyor = False
-if 'son_guncelleme' not in st.session_state: st.session_state.son_guncelleme = time.time()
-if 'aktif_kullanici' not in st.session_state: st.session_state.aktif_kullanici = None
 
-# --- GİRİŞ & KAYIT ---
+# Uygulama açıldığında otomatik hatırlama kontrolü
+if 'aktif_kullanici' not in st.session_state:
+    st.session_state.aktif_kullanici = None
+
 if st.session_state.aktif_kullanici is None:
     st.title("🚀 ROTA AI")
     t1, t2 = st.tabs(["🔑 GİRİŞ", "📝 KAYIT"])
+    
     with t1:
-        u = st.text_input("Kullanıcı Adı")
-        p = st.text_input("Şifre", type="password")
+        u = st.text_input("Kullanıcı Adı", key="login_user")
+        p = st.text_input("Şifre", type="password", key="login_pass")
+        beni_hatirla = st.checkbox("Beni Hatırla")
+        
         if st.button("GİRİŞ YAP"):
             if u in st.session_state.db and st.session_state.db[u]['password'] == p:
                 st.session_state.aktif_kullanici = u
+                # Not: Beni hatırla seçilirse session aktif kalır. 
+                # Kalıcı çerezler Streamlit'te ekstra kütüphane gerektirir ancak bu yapı tarayıcı açıkken seni tutar.
+                st.success(f"Hoş geldin {u}!")
                 st.rerun()
-            else: st.error("Kullanıcı adı veya şifre hatalı!")
+            else:
+                st.error("Kullanıcı adı veya şifre hatalı!")
+
     with t2:
-        nu = st.text_input("Yeni Kullanıcı Adı")
-        np = st.text_input("Şifre Belirle", type="password")
-        if st.button("HESAP OLUŞTUR"):
-            if nu and np:
-                if nu not in st.session_state.db:
-                    st.session_state.db[nu] = {
-                        'password': np, 'xp': 0, 'level': 1, 'ana_hedef': 'Mühendislik Öğrencisi', 
-                        'data': pd.DataFrame(columns=['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan']), 
-                        'dil': 'TR', 'tema_rengi': '#4FACFE', 'habits': [], 'notes': [], 
-                        'mevcut_gno': 0.0, 'toplam_kredi': 0, 'pomo_count': 0, 'sinavlar': []
-                    }
-                    veritabanini_kaydet(st.session_state.db)
-                    st.success("Kayıt Başarılı!")
-                else: st.warning("Bu kullanıcı adı alınmış.")
+        with st.form("kayit_formu"):
+            nu = st.text_input("Kullanıcı Adı oluştur")
+            np = st.text_input("Şifre belirle", type="password")
+            n_meslek = st.text_input("Meslek / Bölüm (Örn: Elektrik Müh.)")
+            n_seviye = st.selectbox("Eğitim Seviyesi", ["Lise", "Önlisans", "Lisans", "Yüksek Lisans", "Doktora"])
+            
+            submit_kayit = st.form_submit_button("HESAP OLUŞTUR")
+            
+            if submit_kayit:
+                if nu and np and n_meslek:
+                    if nu not in st.session_state.db:
+                        st.session_state.db[nu] = {
+                            'password': np,
+                            'xp': 0,
+                            'level': 1,
+                            'ana_hedef': n_meslek,
+                            'egitim_duzeyi': n_seviye,
+                            'data': pd.DataFrame(columns=['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan']),
+                            'dil': 'TR',
+                            'tema_rengi': '#4FACFE',
+                            'habits': [],
+                            'notes': [],
+                            'sinavlar': [],
+                            'mevcut_gno': 0.0,
+                            'toplam_kredi': 0,
+                            'pomo_count': 0
+                        }
+                        veritabanini_kaydet(st.session_state.db)
+                        st.success("Hesabın başarıyla oluşturuldu! Giriş sekmesine geçebilirsin.")
+                    else:
+                        st.warning("Bu kullanıcı adı zaten mevcut.")
+                else:
+                    st.error("Lütfen tüm alanları doldur.")
     st.stop()
+
 
 u_id = st.session_state.aktif_kullanici
 u_info = st.session_state.db[u_id]
@@ -232,6 +228,88 @@ elif menu in ["📅 Sınavlar", "📅 Exams"]:
             sc1.write(f"📖 **{ex['ders']}**"); sc2.info(f"📅 {ex['tarih']}")
             if sc3.button("Sil", key=f"ex_s_{i}"):
                 u_info['sinavlar'].pop(i); veritabanini_kaydet(st.session_state.db); st.rerun()
+# --- AKADEMİK ---
+elif menu in ["🎓 Akademik", "🎓 Academic"]:
+    st.title(L["basliklar"]["akademik"])
+    tab1, tab2 = st.tabs(["📊 GNO Hesapla", "📉 Devamsızlık"])
+    with tab1:
+        st.subheader("📌 Mevcut Akademik Veriler")
+        gc1, gc2 = st.columns(2)
+        m_gno = gc1.number_input("Genel Ortalama (GNO)", 0.0, 4.0, float(u_info.get('mevcut_gno', 0.0)))
+        m_kr = gc2.number_input("Toplam Kredi", 0, 300, int(u_info.get('toplam_kredi', 0)))
+        
+        st.subheader("📚 Dönem Dersleri")
+        gpa_df = pd.DataFrame(u_info.get('gpa_list', []), columns=["Ders", "Kredi", "Not"])
+        edited_gpa = st.data_editor(gpa_df, num_rows="dynamic", use_container_width=True)
+        
+        if st.button("Kaydet ve Hesapla"):
+            u_info['mevcut_gno'], u_info['toplam_kredi'] = m_gno, m_kr
+            u_info['gpa_list'] = edited_gpa.to_dict(orient='records')
+            dk = edited_gpa['Kredi'].sum()
+            dp = (edited_gpa['Kredi'] * edited_gpa['Not']).sum()
+            y_gno = ((m_gno * m_kr) + dp) / (m_kr + dk) if (m_kr + dk) > 0 else 0
+            st.success(f"Dönem Ortalaması: {dp/dk if dk > 0 else 0:.2f} | Yeni GNO: {y_gno:.2f}")
+            veritabanini_kaydet(st.session_state.db)
+
+    with tab2:
+        att_df = pd.DataFrame(u_info.get('attendance', []), columns=["Ders", "Limit", "Kaçırılan"])
+        edited_att = st.data_editor(att_df, num_rows="dynamic", use_container_width=True)
+        if st.button("Kaydet"):
+            u_info['attendance'] = edited_att.to_dict(orient='records'); veritabanini_kaydet(st.session_state.db)
+# --- BAŞARILAR ---
+elif menu in ["🏆 Başarılar", "🏆 Achievements"]:
+    st.title(L["basliklar"]["basari"])
+    
+    # Üst Bilgi Kartları
+    c1, c2, c3 = st.columns(3)
+    current_xp = u_info.get('xp', 0)
+    current_level = u_info.get('level', 1)
+    pomo_total = u_info.get('pomo_count', 0)
+    
+    with c1:
+        st.metric("✨ Toplam XP", f"{current_xp}")
+    with c2:
+        st.metric("🆙 Seviye", f"{current_level}")
+    with c3:
+        st.metric("🔥 Odak Seansları", f"{pomo_total}")
+
+    # Seviye İlerleme Çubuğu
+    xp_for_next_level = 500
+    progress_val = (current_xp % xp_for_next_level) / xp_for_next_level
+    st.write(f"**Sonraki Seviye İlerlemesi:** {current_xp % xp_for_next_level} / {xp_for_next_level} XP")
+    st.progress(progress_val)
+    
+    st.divider()
+    
+    # Rozetler (Achievements) Bölümü
+    st.subheader("🏅 Kazanılan Rozetler")
+    
+    # Rozet kriterlerini belirleyelim
+    rozetler = [
+        {"isim": "Yolun Başında", "sart": current_xp >= 100, "ikon": "🌱", "mesaj": "100 XP Barajını Aştın!"},
+        {"isim": "Odak Ustası", "sart": pomo_total >= 5, "ikon": "🎯", "mesaj": "5 Başarılı Odak Seansı!"},
+        {"isim": "Disiplinli", "sart": current_level >= 3, "ikon": "📜", "mesaj": "3. Seviyeye Ulaştın!"},
+        {"isim": "Gece Kuşu", "sart": current_xp >= 1000, "ikon": "🦉", "mesaj": "1000 XP Topladın!"},
+        {"isim": "Zirve Mimarı", "sart": pomo_total >= 20, "ikon": "🏔️", "mesaj": "20 Odak Seansı Tamamlandı!"},
+        {"isim": "Efsane", "sart": current_level >= 10, "ikon": "🌟", "mesaj": "10. Seviyeye Ulaştın!"}
+    ]
+    
+    # Rozetleri 3'lü sütunlar halinde gösterelim
+    cols = st.columns(3)
+    for i, r in enumerate(rozetler):
+        with cols[i % 3]:
+            if r["sart"]:
+                st.success(f"### {r['ikon']}\n**{r['isim']}**\n\n{r['mesaj']}")
+            else:
+                st.info(f"### 🔒\n**{r['isim']}**\n\n*Kilitli*")
+
+    st.divider()
+    
+    # İstatistiksel Özet
+    with st.expander("📊 Detaylı XP İstatistikleri"):
+        st.write(f"Tamamlanan Görevlerden Gelen Tahmini XP: {len(u_info.get('data', [])) * 20}")
+        st.write(f"Odak Seanslarından Gelen XP: {pomo_total * 100}")
+        st.info("İpucu: Her görev tamamlama 20 XP, her odak seansı (Pomodoro) 100 XP kazandırır!")
 
 # --- AI MENTOR ---
 elif menu in ["🤖 AI Mentor"]:
