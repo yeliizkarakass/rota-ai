@@ -48,14 +48,12 @@ def veritabanini_yukle():
                     defaults = {'password': '123', 'xp': 0, 'level': 1, 'ana_hedef': 'Öğrenci', 'sinavlar': [], 'notes': [], 'pomo_count': 0, 'dil': 'TR', 'habits': [], 'attendance': [], 'gpa_list': [], 'tema_rengi': '#4FACFE', 'egitim_duzeyi': 'Lisans', 'mevcut_gno': 0.0, 'toplam_kredi': 0}
                     for k, v in defaults.items():
                         if k not in data[u]: data[u][k] = v
-                    # DataFrame dönüşümü
                     if isinstance(data[u]['data'], list):
                         data[u]['data'] = pd.DataFrame(data[u]['data'])
                     elif not isinstance(data[u]['data'], pd.DataFrame):
                         data[u]['data'] = pd.DataFrame(columns=['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan'])
                 return data
-        except Exception as e: 
-            return {}
+        except Exception: return {}
     return {}
 
 def veritabanini_kaydet(db):
@@ -100,8 +98,8 @@ if st.session_state.aktif_kullanici is None:
                         'mevcut_gno': 0.0, 'toplam_kredi': 0, 'pomo_count': 0, 'sinavlar': []
                     }
                     veritabanini_kaydet(st.session_state.db)
-                    st.success("Kayıt Başarılı! Şimdi giriş yapabilirsiniz.")
-                else: st.warning("Bu kullanıcı adı zaten alınmış.")
+                    st.success("Kayıt Başarılı!")
+                else: st.warning("Bu kullanıcı adı alınmış.")
     st.stop()
 
 u_id = st.session_state.aktif_kullanici
@@ -109,7 +107,6 @@ u_info = st.session_state.db[u_id]
 L = DIL_PAKETI.get(u_info.get('dil', 'TR'), DIL_PAKETI["TR"])
 TEMA = u_info.get('tema_rengi', '#4FACFE')
 
-# Dinamik Tema Uygulama
 st.markdown(f"<style>.stButton>button {{ background-color: {TEMA}; color: white; border-radius:8px; font-weight: bold; }} h1, h2, h3 {{ color: {TEMA}; }} .stProgress > div > div > div > div {{ background-color: {TEMA}; }} [data-testid='stExpander'] {{ border: 1px solid {TEMA}; }} </style>", unsafe_allow_html=True)
 
 # --- SIDEBAR ---
@@ -166,18 +163,26 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
                 if st.form_submit_button("Ekle"):
                     u_info['data'] = pd.concat([u_info['data'], pd.DataFrame([{'Gün': g, 'Görev': ng, 'Hedef': nh, 'Birim': nb, 'Yapılan': 0}])], ignore_index=True)
                     veritabanini_kaydet(st.session_state.db); st.rerun()
-         
-        st.divider(); st.subheader(L["basliklar"]["aliskanlik"])
+
+    # --- ALIŞKANLIKLAR BÖLÜMÜ ---
+    st.divider()
+    st.subheader(L["basliklar"]["aliskanlik"])
     h_df = pd.DataFrame(u_info.get('habits', []), columns=["Alışkanlık", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"])
-    if h_df.empty: h_df = pd.DataFrame([{"Alışkanlık": "Kitap Okuma 📖", "Pzt": False, "Sal": False, "Çar": False, "Per": False, "Cum": False, "Cmt": False, "Paz": False}])
-    edited_h = st.data_editor(h_df, num_rows="dynamic", use_container_width=True, hide_index=True)
+    if h_df.empty: 
+        h_df = pd.DataFrame([{"Alışkanlık": "Kitap Okuma 📖", "Pzt": False, "Sal": False, "Çar": False, "Per": False, "Cum": False, "Cmt": False, "Paz": False}])
+    
+    edited_h = st.data_editor(h_df, num_rows="dynamic", use_container_width=True, hide_index=True, key="habit_editor")
+    
     if not h_df.equals(edited_h):
-        u_info['habits'] = edited_h.to_dict(orient='records'); veritabanini_kaydet(st.session_state.db)
+        u_info['habits'] = edited_h.to_dict(orient='records')
+        veritabanini_kaydet(st.session_state.db)
+        # Progress bar'ların güncellenmesi için rerun yerine sadece görselleştirme yeterli ama stabilite için:
+    
     for _, row in edited_h.iterrows():
         tik = sum([1 for gun in ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"] if row.get(gun, False) is True])
         c_h1, c_h2 = st.columns([1, 3])
         c_h1.caption(f"**{row['Alışkanlık']}**")
-        c_h2.progress(tik / 7)
+        c_h2.progress(tik / 7, text=f"%{int((tik/7)*100)}")
 
 # --- ODAK ---
 elif menu in ["⏱️ Odak", "⏱️ Focus"]:
@@ -236,7 +241,7 @@ elif menu in ["🤖 AI Mentor"]:
     if prompt:
         with st.chat_message("user"): st.write(prompt)
         with st.chat_message("assistant"):
-            st.write(f"'{prompt}' konulu sorunu aldım. Şu an mühendislik veri tabanımı tarıyorum. (Not: Bu özellik Gemini API anahtarı ile tam kapasite çalışır.)")
+            st.write(f"'{prompt}' konulu sorunu aldım. Şu an mühendislik veri tabanımı tarıyorum.")
 
 # --- AYARLAR ---
 elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
@@ -246,23 +251,19 @@ elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
         new_u_id = st.text_input("Kullanıcı Adı (Giriş ID)", value=u_id)
         new_pass = st.text_input("Yeni Şifre", value=u_info['password'], type="password")
         new_goal = st.text_input("Hedef Meslek / Bölüm", value=u_info.get('ana_hedef', ''))
-        
         st.subheader("🌍 Sistem")
         new_lang = st.selectbox("Dil", ["TR", "EN"], index=0 if u_info['dil'] == "TR" else 1)
-        
-        if st.form_submit_button("Tüm Değişiklikleri Kaydet"):
-            # Kullanıcı adı değişikliği varsa veritabanını güncelle
+        if st.form_submit_button("Değişiklikleri Kaydet"):
             if new_u_id != u_id:
                 st.session_state.db[new_u_id] = st.session_state.db.pop(u_id)
                 st.session_state.aktif_kullanici = new_u_id
-            
             u_info = st.session_state.db[st.session_state.aktif_kullanici]
             u_info.update({'password': new_pass, 'ana_hedef': new_goal, 'dil': new_lang})
             veritabanini_kaydet(st.session_state.db)
             st.success("Bilgiler güncellendi!")
             st.rerun()
 
-# --- ÇIKIŞ BUTONU ---
+# --- ÇIKIŞ ---
 if st.sidebar.button(L["butonlar"]["cikis"]):
     st.session_state.aktif_kullanici = None
     st.rerun()
