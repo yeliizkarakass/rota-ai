@@ -254,7 +254,7 @@ elif menu in ["📅 Sınavlar", "📅 Exams"]:
 elif menu in ["🎓 Akademik", "🎓 Academic"]:
     st.title(L["basliklar"]["akademik"])
     
-    # Harf notu katsayıları
+    # Üniversite standart harf notu katsayıları
     HARF_KATSY = {
         "AA": 4.0, "BA": 3.5, "BB": 3.0, "CB": 2.5, 
         "CC": 2.0, "DC": 1.5, "DD": 1.0, "FD": 0.5, "FF": 0.0
@@ -263,29 +263,20 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
     tab1, tab2 = st.tabs(["📊 GNO Hesapla", "📉 Devamsızlık"])
     
     with tab1:
-        st.subheader("📌 Mevcut Akademik Veriler")
-        gc1, gc2 = st.columns(2)
+        st.subheader("📚 Dönem Derslerini Girin")
+        st.info("Aşağıdaki tabloya derslerini ekle, kredini ve harf notunu seç. Sistem otomatik hesaplayacaktır.")
         
-        # HATA DÜZELTME: Verinin tekil sayı (scalar) olduğundan emin oluyoruz
-        m_gno_val = u_info.get('mevcut_gno', 0.0)
-        m_kr_val = u_info.get('toplam_kredi', 0)
+        # Mevcut verileri çekiyoruz
+        gpa_list = u_info.get('gpa_list', [])
+        gpa_df = pd.DataFrame(gpa_list, columns=["Ders", "Kredi", "Harf Notu"])
         
-        # Eğer veri Pandas serisi olarak gelmişse ilk elemanı al, yoksa direkt kullan
-        safe_gno = float(m_gno_val.iloc[0] if isinstance(m_gno_val, pd.Series) else m_gno_val)
-        safe_kr = int(m_kr_val.iloc[0] if isinstance(m_kr_val, pd.Series) else m_kr_val)
-        
-        m_gno = gc1.number_input("Genel Ortalama (GNO)", 0.0, 4.0, safe_gno)
-        m_kr = gc2.number_input("Toplam Kredi", 0, 300, safe_kr)
-        
-        st.subheader("📚 Dönem Dersleri")
-        
-        gpa_df = pd.DataFrame(u_info.get('gpa_list', []), columns=["Ders", "Kredi", "Harf Notu"])
-        
+        # Tablo Editörü
         edited_gpa = st.data_editor(
             gpa_df, 
             num_rows="dynamic", 
             use_container_width=True,
             column_config={
+                "Kredi": st.column_config.NumberColumn("Kredi", min_value=1, max_value=10, step=1, default=3),
                 "Harf Notu": st.column_config.SelectboxColumn(
                     "Harf Notu",
                     options=list(HARF_KATSY.keys()),
@@ -294,26 +285,35 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
             }
         )
         
-        if st.button("Kaydet ve Hesapla"):
-            u_info['mevcut_gno'], u_info['toplam_kredi'] = m_gno, m_kr
-            u_info['gpa_list'] = edited_gpa.to_dict(orient='records')
+        if st.button("Hesapla ve Verileri Kaydet"):
+            # Boş satırları temizle
+            clean_df = edited_gpa.dropna(subset=["Ders", "Kredi", "Harf Notu"])
             
-            dk = edited_gpa['Kredi'].sum()
-            
-            dp = 0
-            for _, row in edited_gpa.iterrows():
-                # Harf notu üzerinden katsayıyı al
-                katsayi = HARF_KATSY.get(row['Harf Notu'], 0)
-                dp += (row['Kredi'] * katsayi)
-            
-            toplam_yeni_kredi = m_kr + dk
-            y_gno = ((m_gno * m_kr) + dp) / toplam_yeni_kredi if toplam_yeni_kredi > 0 else 0
-            d_ort = dp / dk if dk > 0 else 0
-            
-            st.success(f"Dönem Ortalaması: {d_ort:.2f} | Yeni GNO: {y_gno:.2f}")
-            veritabanini_kaydet(st.session_state.db)
+            if not clean_df.empty:
+                # Toplam kredi ve toplam puan hesaplama
+                toplam_kredi = clean_df["Kredi"].sum()
+                toplam_puan = sum(row["Kredi"] * HARF_KATSY[row["Harf Notu"]] for _, row in clean_df.iterrows())
+                
+                # GNO Hesapla
+                gno_sonuc = toplam_puan / toplam_kredi if toplam_kredi > 0 else 0
+                
+                # Veritabanına kaydet
+                u_info['gpa_list'] = clean_df.to_dict(orient='records')
+                u_info['mevcut_gno'] = round(gno_sonuc, 2)
+                u_info['toplam_kredi'] = int(toplam_kredi)
+                veritabanini_kaydet(st.session_state.db)
+                
+                # Sonuç ekranı
+                st.metric(label="Hesaplanan GNO", value=f"{gno_sonuc:.2f}")
+                if gno_sonuc >= 3.50:
+                    st.success("Tebrikler! Yüksek Onur Belgesi adayı vurgusu! 🏆")
+                elif gno_sonuc >= 3.00:
+                    st.info("Güzel! Onur Belgesi adayı vurgusu! ✨")
+            else:
+                st.warning("Lütfen hesaplama için en az bir ders girin.")
             
     with tab2:
+        # Devamsızlık kısmı (Buraya dokunmuyoruz, verdiğin kodun aynısı)
         st.subheader("📉 Devamsızlık Takibi")
         with st.expander("➕ Yeni Ders Ekle"):
             with st.form("yeni_ders_form", clear_on_submit=True):
