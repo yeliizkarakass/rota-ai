@@ -226,6 +226,18 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
                 if st.form_submit_button(L["butonlar"]["ekle"]):
                     u_info['data'] = pd.concat([u_info['data'], pd.DataFrame([{'Gün': g, 'Görev': ng, 'Hedef': nh, 'Birim': nb, 'Yapılan': 0}])], ignore_index=True)
                     veritabanini_kaydet(st.session_state.db); st.rerun()
+     st.divider()
+    st.subheader("📊 Alışkanlık Takipçisi")
+    h_df = pd.DataFrame(u_info.get('habits', []), columns=["Alışkanlık", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"])
+    if h_df.empty: h_df = pd.DataFrame([{"Alışkanlık": "05:30 Kalkış ⏰", "Pzt": False, "Sal": False, "Çar": False, "Per": False, "Cum": False, "Cmt": False, "Paz": False}])
+    e_habits = st.data_editor(h_df, num_rows="dynamic", use_container_width=True, hide_index=True, key="h_editor")
+    if not h_df.equals(e_habits):
+        u_info['habits'] = e_habits.to_dict(orient='records'); veritabanini_kaydet(st.session_state.db)
+    for _, row in e_habits.iterrows():
+        tik = sum([1 for gun in ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"] if row.get(gun, False) is True])
+        c_h1, c_h2 = st.columns([3, 7])
+        c_h1.caption(f"**{row['Alışkanlık']}**")
+        c_h2.progress(tik / 7, text=f"⭐ %{int((tik/7)*100)}")
 
 # SINAVLAR (Kodun geri kalanı aynı mantıkla devam eder...)
 elif menu in ["📅 Sınavlar", "📅 Exams"]:
