@@ -265,13 +265,20 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
     with tab1:
         st.subheader("📌 Mevcut Akademik Veriler")
         gc1, gc2 = st.columns(2)
-        m_gno = gc1.number_input("Genel Ortalama (GNO)", 0.0, 4.0, float(u_info.get('mevcut_gno', 0.0)))
-        m_kr = gc2.number_input("Toplam Kredi", 0, 300, int(u_info.get('toplam_kredi', 0)))
+        
+        # HATA DÜZELTME: Verinin tekil sayı (scalar) olduğundan emin oluyoruz
+        m_gno_val = u_info.get('mevcut_gno', 0.0)
+        m_kr_val = u_info.get('toplam_kredi', 0)
+        
+        # Eğer veri Pandas serisi olarak gelmişse ilk elemanı al, yoksa direkt kullan
+        safe_gno = float(m_gno_val.iloc[0] if isinstance(m_gno_val, pd.Series) else m_gno_val)
+        safe_kr = int(m_kr_val.iloc[0] if isinstance(m_kr_val, pd.Series) else m_kr_val)
+        
+        m_gno = gc1.number_input("Genel Ortalama (GNO)", 0.0, 4.0, safe_gno)
+        m_kr = gc2.number_input("Toplam Kredi", 0, 300, safe_kr)
         
         st.subheader("📚 Dönem Dersleri")
         
-        # DataFrame yapısını harf notuna göre güncelliyoruz
-        # Eğer u_info içinde eski sayısal notlar varsa hata vermemesi için sütun adını 'Harf Notu' yapıyoruz
         gpa_df = pd.DataFrame(u_info.get('gpa_list', []), columns=["Ders", "Kredi", "Harf Notu"])
         
         edited_gpa = st.data_editor(
@@ -293,13 +300,12 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
             
             dk = edited_gpa['Kredi'].sum()
             
-            # Harf notlarını katsayıya çevirip toplam puanı hesaplama
             dp = 0
             for _, row in edited_gpa.iterrows():
+                # Harf notu üzerinden katsayıyı al
                 katsayi = HARF_KATSY.get(row['Harf Notu'], 0)
                 dp += (row['Kredi'] * katsayi)
             
-            # Yeni GNO Formülü: ((Eski GNO * Eski Kredi) + Dönem Puanı) / Toplam Kredi
             toplam_yeni_kredi = m_kr + dk
             y_gno = ((m_gno * m_kr) + dp) / toplam_yeni_kredi if toplam_yeni_kredi > 0 else 0
             d_ort = dp / dk if dk > 0 else 0
@@ -308,7 +314,6 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
             veritabanini_kaydet(st.session_state.db)
             
     with tab2:
-        # Devamsızlık kısmı aynı kalabilir, burayı değiştirmene gerek yok
         st.subheader("📉 Devamsızlık Takibi")
         with st.expander("➕ Yeni Ders Ekle"):
             with st.form("yeni_ders_form", clear_on_submit=True):
@@ -341,6 +346,7 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
                         u_info['attendance'].pop(idx)
                         veritabanini_kaydet(st.session_state.db)
                         st.rerun()
+
 
 
 # --- BAŞARILAR ---
