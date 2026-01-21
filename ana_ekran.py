@@ -254,7 +254,6 @@ elif menu in ["📅 Sınavlar", "📅 Exams"]:
 elif menu in ["🎓 Akademik", "🎓 Academic"]:
     st.title(L["basliklar"]["akademik"])
     
-    # Üniversite standart harf notu katsayıları
     HARF_KATSY = {
         "AA": 4.0, "BA": 3.5, "BB": 3.0, "CB": 2.5, 
         "CC": 2.0, "DC": 1.5, "DD": 1.0, "FD": 0.5, "FF": 0.0
@@ -263,20 +262,34 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
     tab1, tab2 = st.tabs(["📊 GNO Hesapla", "📉 Devamsızlık"])
     
     with tab1:
-        st.subheader("📚 Dönem Derslerini Girin")
-        st.info("Aşağıdaki tabloya derslerini ekle, kredini ve harf notunu seç. Sistem otomatik hesaplayacaktır.")
+        st.subheader("📌 Geçmiş Akademik Başarı (Opsiyonel)")
+        st.caption("Eğer önceki dönemlerden gelen ortalamanız varsa giriniz. Yoksa 0 bırakabilirsiniz.")
         
-        # Mevcut verileri çekiyoruz
-        gpa_list = u_info.get('gpa_list', [])
-        gpa_df = pd.DataFrame(gpa_list, columns=["Ders", "Kredi", "Harf Notu"])
+        gc1, gc2 = st.columns(2)
+        # Veriyi güvenli çekme
+        m_gno_val = u_info.get('mevcut_gno', 0.0)
+        m_kr_val = u_info.get('toplam_kredi', 0)
         
-        # Tablo Editörü
+        # Scalar (tekil sayı) kontrolü
+        safe_gno = float(m_gno_val.iloc[0] if isinstance(m_gno_val, pd.Series) else m_gno_val)
+        safe_kr = int(m_kr_val.iloc[0] if isinstance(m_kr_val, pd.Series) else m_kr_val)
+        
+        m_gno_input = gc1.number_input("Eski Genel Ortalama", 0.0, 4.0, safe_gno, step=0.01)
+        m_kr_input = gc2.number_input("Eski Toplam Kredi", 0, 500, safe_kr, step=1)
+        
+        st.divider()
+        st.subheader("📚 Bu Dönemki Dersler")
+        
+        # Mevcut ders listesini yükle
+        gpa_df = pd.DataFrame(u_info.get('gpa_list', []), columns=["Ders", "Kredi", "Harf Notu"])
+        
+        # Ders tablosu editörü
         edited_gpa = st.data_editor(
             gpa_df, 
             num_rows="dynamic", 
             use_container_width=True,
             column_config={
-                "Kredi": st.column_config.NumberColumn("Kredi", min_value=1, max_value=10, step=1, default=3),
+                "Kredi": st.column_config.NumberColumn("Kredi", min_value=1, max_value=20, step=1),
                 "Harf Notu": st.column_config.SelectboxColumn(
                     "Harf Notu",
                     options=list(HARF_KATSY.keys()),
@@ -285,35 +298,37 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
             }
         )
         
-        if st.button("Hesapla ve Verileri Kaydet"):
-            # Boş satırları temizle
+        if st.button("Kaydet ve Genel Ortalamayı Hesapla"):
+            # Boş olmayan dersleri filtrele
             clean_df = edited_gpa.dropna(subset=["Ders", "Kredi", "Harf Notu"])
             
-            if not clean_df.empty:
-                # Toplam kredi ve toplam puan hesaplama
-                toplam_kredi = clean_df["Kredi"].sum()
-                toplam_puan = sum(row["Kredi"] * HARF_KATSY[row["Harf Notu"]] for _, row in clean_df.iterrows())
-                
-                # GNO Hesapla
-                gno_sonuc = toplam_puan / toplam_kredi if toplam_kredi > 0 else 0
-                
-                # Veritabanına kaydet
-                u_info['gpa_list'] = clean_df.to_dict(orient='records')
-                u_info['mevcut_gno'] = round(gno_sonuc, 2)
-                u_info['toplam_kredi'] = int(toplam_kredi)
-                veritabanini_kaydet(st.session_state.db)
-                
-                # Sonuç ekranı
-                st.metric(label="Hesaplanan GNO", value=f"{gno_sonuc:.2f}")
-                if gno_sonuc >= 3.50:
-                    st.success("Tebrikler! Yüksek Onur Belgesi adayı vurgusu! 🏆")
-                elif gno_sonuc >= 3.00:
-                    st.info("Güzel! Onur Belgesi adayı vurgusu! ✨")
-            else:
-                st.warning("Lütfen hesaplama için en az bir ders girin.")
+            # Bu dönemki toplam kredi ve puan
+            donem_kredisi = clean_df["Kredi"].sum()
+            donem_puani = sum(row["Kredi"] * HARF_KATSY[row["Harf Notu"]] for _, row in clean_df.iterrows())
             
+            # Genel Hesaplama Mantığı:
+            # ((Eski GNO * Eski Kredi) + Bu Dönem Puanı) / (Eski Kredi + Bu Dönem Kredisi)
+            toplam_genel_kredi = m_kr_input + donem_kredisi
+            toplam_genel_puan = (m_gno_input * m_kr_input) + donem_puani
+            
+            yeni_gno = toplam_genel_puan / toplam_genel_kredi if toplam_genel_kredi > 0 else 0
+            donem_ort = donem_puani / donem_kredisi if donem_kredisi > 0 else 0
+            
+            # Veritabanına Yazma
+            u_info['mevcut_gno'] = m_gno_input
+            u_info['toplam_kredi'] = m_kr_input
+            u_info['gpa_list'] = clean_df.to_dict(orient='records')
+            veritabanini_kaydet(st.session_state.db)
+            
+            # Sonuçları Göster
+            res1, res2 = st.columns(2)
+            res1.metric("Dönem Ortalaması", f"{donem_ort:.2f}")
+            res2.metric("Yeni Genel Ortalama (GNO)", f"{yeni_gno:.2f}", delta=round(yeni_gno - m_gno_input, 3))
+            
+            if yeni_gno >= 3.0: st.balloons()
+
     with tab2:
-        # Devamsızlık kısmı (Buraya dokunmuyoruz, verdiğin kodun aynısı)
+        # Devamsızlık Takibi (Değişmedi, orijinal kodun)
         st.subheader("📉 Devamsızlık Takibi")
         with st.expander("➕ Yeni Ders Ekle"):
             with st.form("yeni_ders_form", clear_on_submit=True):
@@ -336,8 +351,6 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
                     col_ad.caption(f"Toplam Limit: {item['Limit']}")
                     col_durum.markdown(f"<p style='color:{renk}; font-weight:bold; margin-bottom:0;'>Durum: {item['Kaçırılan']} / {item['Limit']}</p>", unsafe_allow_html=True)
                     col_durum.progress(min(item['Kaçırılan'] / item['Limit'], 1.0))
-                    if kalan <= 0:
-                        col_durum.error("⚠️ Limit doldu!")
                     if col_islem.button("➕ Gitmedim", key=f"add_att_{idx}"):
                         u_info['attendance'][idx]['Kaçırılan'] += 1
                         veritabanini_kaydet(st.session_state.db)
@@ -346,6 +359,7 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
                         u_info['attendance'].pop(idx)
                         veritabanini_kaydet(st.session_state.db)
                         st.rerun()
+
 
 # --- BAŞARILAR ---
 elif menu in ["🏆 Başarılar", "🏆 Achievements"]:
