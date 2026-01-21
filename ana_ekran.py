@@ -247,12 +247,55 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
             y_gno = ((m_gno * m_kr) + dp) / (m_kr + dk) if (m_kr + dk) > 0 else 0
             st.success(f"Dönem Ortalaması: {dp/dk if dk > 0 else 0:.2f} | Yeni GNO: {y_gno:.2f}")
             veritabanini_kaydet(st.session_state.db)
-    with tab2:
-        att_df = pd.DataFrame(u_info.get('attendance', []), columns=["Ders", "Limit", "Kaçırılan"])
-        edited_att = st.data_editor(att_df, num_rows="dynamic", use_container_width=True)
-        if st.button("Kaydet"):
-            u_info['attendance'] = edited_att.to_dict(orient='records')
-            veritabanini_kaydet(st.session_state.db)
+        with tab2:
+        st.subheader("📉 Devamsızlık Takibi")
+        
+        # Yeni Ders Ekleme Formu
+        with st.expander("➕ Yeni Ders Ekle"):
+            with st.form("yeni_ders_form", clear_on_submit=True):
+                c1, c2 = st.columns(2)
+                yeni_ders_ad = c1.text_input("Ders Adı")
+                yeni_ders_limit = c2.number_input("Devamsızlık Hakkı (Saat/Hafta)", min_value=1, value=4)
+                if st.form_submit_button("Listeye Ekle"):
+                    if 'attendance' not in u_info: u_info['attendance'] = []
+                    u_info['attendance'].append({"Ders": yeni_ders_ad, "Limit": yeni_ders_limit, "Kaçırılan": 0})
+                    veritabanini_kaydet(st.session_state.db)
+                    st.rerun()
+
+        # Dersleri Listele ve Yönet
+        if 'attendance' in u_info and u_info['attendance']:
+            for idx, item in enumerate(u_info['attendance']):
+                with st.container(border=True):
+                    col_ad, col_durum, col_islem = st.columns([3, 4, 2])
+                    
+                    kalan = item['Limit'] - item['Kaçırılan']
+                    renk = "red" if kalan <= 0 else "orange" if kalan <= 1 else "green"
+                    
+                    col_ad.markdown(f"### {item['Ders']}")
+                    col_ad.caption(f"Toplam Limit: {item['Limit']}")
+                    
+                    # Durum Göstergesi
+                    col_durum.markdown(f"<p style='color:{renk}; font-weight:bold; margin-bottom:0;'>Durum: {item['Kaçırılan']} / {item['Limit']}</p>", unsafe_allow_html=True)
+                    col_durum.progress(min(item['Kaçırılan'] / item['Limit'], 1.0))
+                    
+                    if kalan <= 0:
+                        col_durum.error("⚠️ Limit doldu! Kalma tehlikesi!")
+                    elif kalan == 1:
+                        col_durum.warning("⚠️ Son 1 hak!")
+
+                    # Artırma ve Silme Butonları
+                    if col_islem.button("➕ Gitmedim", key=f"add_att_{idx}"):
+                        u_info['attendance'][idx]['Kaçırılan'] += 1
+                        veritabanini_kaydet(st.session_state.db)
+                        st.rerun()
+                    
+                    if col_islem.button("🗑️ Sil", key=f"del_att_{idx}"):
+                        u_info['attendance'].pop(idx)
+                        veritabanini_kaydet(st.session_state.db)
+                        st.rerun()
+        else:
+            st.info("Henüz takip edilen ders yok.")
+
 
 # --- BAŞARILAR ---
 elif menu in ["🏆 Başarılar", "🏆 Achievements"]:
