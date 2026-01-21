@@ -214,60 +214,88 @@ elif menu in ["🏆 Başarılar", "🏆 Achievements"]:
 elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     st.title(L["basliklar"]["pomo"])
     
-    # Süreyi 180 dakikaya kadar seçeneklerle genişlettik
+    # Süre seçenekleri (180 dakikaya kadar)
     dk_secenekleri = [15, 25, 45, 60, 90, 120, 150, 180]
+    
+    # Session state kontrolü
+    if 'pomo_kalan_saniye' not in st.session_state:
+        st.session_state.pomo_kalan_saniye = 25 * 60
+    
     dk = st.select_slider("Dakika Seçin", options=dk_secenekleri, value=25)
     
     c1, c2, c3 = st.columns(3)
     
-    # Başlat butonu: Kalan saniyeyi set eder ve çalışıyor durumuna getirir
     if c1.button(L["butonlar"]["baslat"]):
         st.session_state.pomo_kalan_saniye = dk * 60
         st.session_state.pomo_calisiyor = True
         st.session_state.son_guncelleme = time.time()
         st.rerun()
 
-    # Durdur butonu
     if c2.button(L["butonlar"]["durdur"]):
         st.session_state.pomo_calisiyor = False
         st.rerun()
 
-    # Sıfırla butonu
     if c3.button(L["butonlar"]["sifirla"]):
         st.session_state.pomo_calisiyor = False
         st.session_state.pomo_kalan_saniye = 25 * 60
         st.rerun()
     
-    # Sayaç Mantığı
-    if st.session_state.pomo_calisiyor:
-        su_an = time.time()
-        gecen_sure = su_an - st.session_state.son_guncelleme
-        st.session_state.pomo_kalan_saniye -= gecen_sure
-        st.session_state.son_guncelleme = su_an
-        
-        if st.session_state.pomo_kalan_saniye <= 0:
-            st.session_state.pomo_calisiyor = False
-            st.session_state.pomo_kalan_saniye = 0
-            # Puan ve sayaç güncelleme
-            u_info['xp'] += 100
-            u_info['pomo_count'] = u_info.get('pomo_count', 0) + 1
-            veritabanini_kaydet(st.session_state.db)
-            st.balloons()
-            st.rerun()
-        
-        # Her saniye ekranın yenilenmesi için (DİKKAT: rerun en sonda olmalı)
-        time.sleep(0.1) # Daha akıcı bir görüntü için bekleme süresini düşürdük
-        st.rerun()
+    # Dinamik Alanlar
+    sayac_alani = st.empty()
+    sidebar_sayac = st.sidebar.empty() # Sidebarda yer açtık
     
-    # Görsel Sayaç
-    m, s = divmod(max(0, int(st.session_state.pomo_kalan_saniye)), 60)
-    st.markdown(f"""
-        <div style="display: flex; justify-content: center; align-items: center; background-color: #f0f2f6; border-radius: 20px; padding: 20px; margin: 20px 0;">
-            <h1 style="font-size: 150px; color: {TEMA}; font-family: 'Courier New', Courier, monospace; margin: 0;">
-                {m:02d}:{s:02d}
-            </h1>
-        </div>
-    """, unsafe_allow_html=True)
+    if st.session_state.pomo_calisiyor:
+        while st.session_state.pomo_kalan_saniye > 0 and st.session_state.pomo_calisiyor:
+            su_an = time.time()
+            gecen_sure = su_an - st.session_state.son_guncelleme
+            st.session_state.pomo_kalan_saniye -= gecen_sure
+            st.session_state.son_guncelleme = su_an
+            
+            # Zamanı formatla
+            m, s = divmod(max(0, int(st.session_state.pomo_kalan_saniye)), 60)
+            zaman_str = f"{m:02d}:{s:02d}"
+            
+            # 1. Ana Ekran Güncelleme
+            sayac_alani.markdown(f"""
+                <div style="display: flex; justify-content: center; align-items: center; background-color: #f0f2f6; border-radius: 20px; padding: 20px; margin: 20px 0; border: 3px solid {TEMA};">
+                    <h1 style="font-size: 120px; color: {TEMA}; font-family: 'monospace'; margin: 0;">
+                        {zaman_str}
+                    </h1>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            # 2. Sidebar Güncelleme
+            sidebar_sayac.markdown(f"""
+                <div style="text-align: center; padding: 10px; background-color: {TEMA}; color: white; border-radius: 10px; margin-bottom: 20px;">
+                    <small>⏱️ Kalan Süre</small><br>
+                    <strong style="font-size: 20px;">{zaman_str}</strong>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            if st.session_state.pomo_kalan_saniye <= 0:
+                st.session_state.pomo_calisiyor = False
+                u_info['xp'] += 100
+                u_info['pomo_count'] = u_info.get('pomo_count', 0) + 1
+                veritabanini_kaydet(st.session_state.db)
+                st.balloons()
+                st.rerun()
+            
+            time.sleep(1) 
+    else:
+        # Çalışmadığı durumdaki gösterim
+        m, s = divmod(max(0, int(st.session_state.pomo_kalan_saniye)), 60)
+        zaman_str = f"{m:02d}:{s:02d}"
+        
+        sayac_alani.markdown(f"""
+            <div style="display: flex; justify-content: center; align-items: center; background-color: #f0f2f6; border-radius: 20px; padding: 20px; margin: 20px 0;">
+                <h1 style="font-size: 120px; color: grey; font-family: 'monospace'; margin: 0;">
+                    {zaman_str}
+                </h1>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        sidebar_sayac.write("⏱️ Sayaç Hazır")
+
 
 
 # --- SINAVLAR ---
