@@ -213,24 +213,62 @@ elif menu in ["🏆 Başarılar", "🏆 Achievements"]:
 # --- ODAK ---
 elif menu in ["⏱️ Odak", "⏱️ Focus"]:
     st.title(L["basliklar"]["pomo"])
-    dk = st.select_slider("Dakika", options=[15, 25, 45, 60, 90], value=25)
-    c1, c2, c3 = st.columns(3)
-    if c1.button("BAŞLAT"): st.session_state.pomo_kalan_saniye, st.session_state.pomo_calisiyor, st.session_state.son_guncelleme = dk * 60, True, time.time()
-    if c2.button("DURDUR"): st.session_state.pomo_calisiyor = False
-    if c3.button("SIFIRLA"): st.session_state.pomo_calisiyor, st.session_state.pomo_kalan_saniye = False, 25*60
     
-    if st.session_state.pomo_calisiyor:
-        st.session_state.pomo_kalan_saniye -= (time.time() - st.session_state.son_guncelleme)
+    # Süreyi 180 dakikaya kadar seçeneklerle genişlettik
+    dk_secenekleri = [15, 25, 45, 60, 90, 120, 150, 180]
+    dk = st.select_slider("Dakika Seçin", options=dk_secenekleri, value=25)
+    
+    c1, c2, c3 = st.columns(3)
+    
+    # Başlat butonu: Kalan saniyeyi set eder ve çalışıyor durumuna getirir
+    if c1.button(L["butonlar"]["baslat"]):
+        st.session_state.pomo_kalan_saniye = dk * 60
+        st.session_state.pomo_calisiyor = True
         st.session_state.son_guncelleme = time.time()
+        st.rerun()
+
+    # Durdur butonu
+    if c2.button(L["butonlar"]["durdur"]):
+        st.session_state.pomo_calisiyor = False
+        st.rerun()
+
+    # Sıfırla butonu
+    if c3.button(L["butonlar"]["sifirla"]):
+        st.session_state.pomo_calisiyor = False
+        st.session_state.pomo_kalan_saniye = 25 * 60
+        st.rerun()
+    
+    # Sayaç Mantığı
+    if st.session_state.pomo_calisiyor:
+        su_an = time.time()
+        gecen_sure = su_an - st.session_state.son_guncelleme
+        st.session_state.pomo_kalan_saniye -= gecen_sure
+        st.session_state.son_guncelleme = su_an
+        
         if st.session_state.pomo_kalan_saniye <= 0:
             st.session_state.pomo_calisiyor = False
+            st.session_state.pomo_kalan_saniye = 0
+            # Puan ve sayaç güncelleme
             u_info['xp'] += 100
             u_info['pomo_count'] = u_info.get('pomo_count', 0) + 1
-            veritabanini_kaydet(st.session_state.db); st.balloons()
-        time.sleep(1); st.rerun()
+            veritabanini_kaydet(st.session_state.db)
+            st.balloons()
+            st.rerun()
+        
+        # Her saniye ekranın yenilenmesi için (DİKKAT: rerun en sonda olmalı)
+        time.sleep(0.1) # Daha akıcı bir görüntü için bekleme süresini düşürdük
+        st.rerun()
     
+    # Görsel Sayaç
     m, s = divmod(max(0, int(st.session_state.pomo_kalan_saniye)), 60)
-    st.markdown(f"<h1 style='text-align:center; font-size:150px; color:{TEMA};'>{m:02d}:{s:02d}</h1>", unsafe_allow_html=True)
+    st.markdown(f"""
+        <div style="display: flex; justify-content: center; align-items: center; background-color: #f0f2f6; border-radius: 20px; padding: 20px; margin: 20px 0;">
+            <h1 style="font-size: 150px; color: {TEMA}; font-family: 'Courier New', Courier, monospace; margin: 0;">
+                {m:02d}:{s:02d}
+            </h1>
+        </div>
+    """, unsafe_allow_html=True)
+
 
 # --- SINAVLAR ---
 elif menu in ["📅 Sınavlar", "📅 Exams"]:
