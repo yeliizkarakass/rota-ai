@@ -129,51 +129,36 @@ menu = st.sidebar.radio("NAVİGASYON", L["menu"])
 
 # --- PANEL ---
 if menu in ["🏠 Panel", "🏠 Dashboard"]:
-    st.title(f"✨ {u_info.get('ana_hedef', 'ÖĞRENCİ').upper()}")
+    st.title(f"✨ {u_info.get('ana_hedef', 'Öğrenci').upper()}")
     
-    # 1. HAFTALIK ÖNİZLEME (YENİ EKLEDİĞİMİZ KISIM)
-    with st.expander("🗓️ HAFTALIK PROGRAM ÖNİZLEMESİ", expanded=False):
-        if not u_info['data'].empty:
-            # Günleri sütun, görevleri satır yaparak özet tablo oluşturur
-            ozet_tablo = u_info['data'].pivot_table(
-                index='Görev', 
-                columns='Gün', 
-                values='Hedef', 
-                aggfunc='sum'
-            ).fillna("-")
-            # Gün sırasını düzenle
-            gun_sirasi = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
-            mevcut_gunler = [g for g in gun_sirasi if g in ozet_tablo.columns]
-            st.dataframe(ozet_tablo[mevcut_gunler], use_container_width=True)
-        else:
-            st.info("Henüz görev eklenmemiş. Aşağıdan eklemeye başlayabilirsin!")
+    # HATA ÖNLEYİCİ: Eğer data boşsa veya sütunlar eksikse düzelt
+    if not isinstance(u_info['data'], pd.DataFrame) or u_info['data'].empty:
+        u_info['data'] = pd.DataFrame(columns=['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan'])
+    
+    # Sütun kontrolü yap (KeyError'u engelleyen kısım)
+    required_columns = ['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan']
+    for col in required_columns:
+        if col not in u_info['data'].columns:
+            u_info['data'][col] = "" if col != 'Yapılan' else 0
 
-    # 2. GRAFİKLER
     if not u_info['data'].empty:
         c1, c2 = st.columns([2, 1])
         with c1:
-            fig = go.Figure([
-                go.Bar(x=u_info['data']['Görev'], y=u_info['data']['Hedef'], name="Hedef", marker_color='#E9ECEF'),
-                go.Bar(x=u_info['data']['Görev'], y=u_info['data']['Yapılan'], name="Yapılan", marker_color=TEMA)
-            ])
-            fig.update_layout(height=300, barmode='group', margin=dict(l=20, r=20, t=20, b=20))
-            st.plotly_chart(fig, use_container_width=True)
+            fig = go.Figure([go.Bar(x=u_info['data']['Görev'], y=u_info['data']['Hedef'], name="Hedef", marker_color='#E9ECEF'),
+                             go.Bar(x=u_info['data']['Görev'], y=u_info['data']['Yapılan'], name="Yapılan", marker_color=TEMA)])
+            fig.update_layout(height=300, barmode='group'); st.plotly_chart(fig, use_container_width=True)
         with c2:
             done = u_info['data']['Yapılan'].astype(float).sum()
             todo = u_info['data']['Hedef'].astype(float).sum()
-            st.plotly_chart(go.Figure(go.Pie(
-                labels=['Biten', 'Kalan'], 
-                values=[done, max(0.1, todo-done)], 
-                hole=.6, 
-                marker_colors=[TEMA, '#FF4B4B']
-            )).update_layout(height=300, showlegend=False, margin=dict(l=20, r=20, t=20, b=20)), use_container_width=True)
+            st.plotly_chart(go.Figure(go.Pie(labels=['Biten', 'Kalan'], values=[done, max(0.1, todo-done)], hole=.6, marker_colors=[TEMA, '#FF4B4B'])).update_layout(height=300, showlegend=False), use_container_width=True)
 
-    # 3. GÜNLÜK TAKİP VE GÖREV EKLEME
     st.subheader(L["basliklar"]["takip"])
     gunler = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
     for g in gunler:
         with st.expander(f"📅 {g.upper()}"):
+            # Maskeleme yaparken KeyError almamak için güvenli filtreleme
             temp_df = u_info['data'][u_info['data']['Gün'] == g]
+            
             for idx, row in temp_df.iterrows():
                 cc1, cc2, cc3 = st.columns([3, 2, 1])
                 cc1.write(f"**{row['Görev']}**")
@@ -192,7 +177,7 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
                 c_a, c_b, c_c = st.columns([2, 1, 1])
                 ng = c_a.text_input("Görev")
                 nh = c_b.number_input("Hedef", min_value=1)
-                nb = c_c.selectbox("Birim", ["Soru", "Saat", "Konu"])
+                nb = c_c.selectbox("Birim", ["Soru", "Saat", "Sayfa"])
                 if st.form_submit_button("Ekle"):
                     if ng:
                         new_row = pd.DataFrame([{'Gün': g, 'Görev': ng, 'Hedef': nh, 'Birim': nb, 'Yapılan': 0}])
@@ -200,27 +185,21 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
                         veritabanini_kaydet(st.session_state.db)
                         st.rerun()
 
-    # 4. ALIŞKANLIKLAR (HATASIZ VERSİYON)
     st.divider()
     st.subheader(L["basliklar"]["aliskanlik"])
-    
-    h_df = pd.DataFrame(u_info.get('habits', []))
-    if h_df.empty:
+    h_df = pd.DataFrame(u_info.get('habits', []), columns=["Alışkanlık", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"])
+    if h_df.empty: 
         h_df = pd.DataFrame([{"Alışkanlık": "Kitap Okuma 📖", "Pzt": False, "Sal": False, "Çar": False, "Per": False, "Cum": False, "Cmt": False, "Paz": False}])
-    
-    edited_h = st.data_editor(h_df, num_rows="dynamic", use_container_width=True, hide_index=True, key="habit_editor_v2")
-    
-    c_btn1, c_btn2 = st.columns(2)
-    if c_btn1.button("✅ Alışkanlıkları Kaydet"):
+    edited_h = st.data_editor(h_df, num_rows="dynamic", use_container_width=True, hide_index=True, key="habit_editor")
+    if not h_df.equals(edited_h):
         u_info['habits'] = edited_h.to_dict(orient='records')
         veritabanini_kaydet(st.session_state.db)
-        st.success("Kaydedildi!")
-        st.rerun()
-        
-    if c_btn2.button("🧹 Biten Görevleri Temizle"):
-        u_info['data'] = u_info['data'][u_info['data']['Yapılan'] < u_info['data']['Hedef']]
-        veritabanini_kaydet(st.session_state.db)
-        st.rerun()
+    
+    for _, row in edited_h.iterrows():
+        tik = sum([1 for gun in ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"] if row.get(gun, False) is True])
+        c_h1, c_h2 = st.columns([1, 3])
+        c_h1.caption(f"**{row['Alışkanlık']}**")
+        c_h2.progress(tik / 7, text=f"%{int((tik/7)*100)}")
 
 
 # --- ODAK ---
