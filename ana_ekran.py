@@ -235,17 +235,34 @@ elif menu in ["⏱️ Odak", "⏱️ Focus"]:
 # --- SINAVLAR ---
 elif menu in ["📅 Sınavlar", "📅 Exams"]:
     st.title(L["basliklar"]["sinavlar"])
+    
+    # HATA ÖNLEYİCİ: Eğer 'sinavlar' anahtarı yoksa boş liste oluştur
+    if 'sinavlar' not in u_info:
+        u_info['sinavlar'] = []
+
     with st.form("ex_f", clear_on_submit=True):
-        c1, c2 = st.columns(2); d_ad, d_tr = c1.text_input("Ders Adı"), c2.date_input("Sınav Tarihi")
+        c1, c2 = st.columns(2)
+        d_ad = c1.text_input("Ders Adı")
+        d_tr = c2.date_input("Sınav Tarihi")
         if st.form_submit_button("Sınav Ekle"):
-            u_info['sinavlar'].append({"id": str(uuid.uuid4()), "ders": d_ad, "tarih": str(d_tr)})
-            veritabanini_kaydet(st.session_state.db); st.rerun()
+            if d_ad: # Boş ders eklenmesini engelle
+                u_info['sinavlar'].append({"id": str(uuid.uuid4()), "ders": d_ad, "tarih": str(d_tr)})
+                veritabanini_kaydet(st.session_state.db)
+                st.rerun()
+            else:
+                st.warning("Lütfen bir ders adı girin.")
+
+    # Listeleme kısmında enumerate kullanırken listeyi kontrol et
     for i, ex in enumerate(u_info['sinavlar']):
         with st.container(border=True):
             sc1, sc2, sc3 = st.columns([3, 2, 1])
-            sc1.write(f"📖 **{ex['ders']}**"); sc2.info(f"📅 {ex['tarih']}")
+            sc1.write(f"📖 **{ex.get('ders', 'Bilinmeyen Ders')}**")
+            sc2.info(f"📅 {ex.get('tarih', '-')}")
             if sc3.button("Sil", key=f"ex_s_{i}"):
-                u_info['sinavlar'].pop(i); veritabanini_kaydet(st.session_state.db); st.rerun()
+                u_info['sinavlar'].pop(i)
+                veritabanini_kaydet(st.session_state.db)
+                st.rerun()
+
 
 # --- AKADEMİK ---
 elif menu in ["🎓 Akademik", "🎓 Academic"]:
