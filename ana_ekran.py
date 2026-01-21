@@ -166,6 +166,18 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
                 if st.form_submit_button("Ekle"):
                     u_info['data'] = pd.concat([u_info['data'], pd.DataFrame([{'Gün': g, 'Görev': ng, 'Hedef': nh, 'Birim': nb, 'Yapılan': 0}])], ignore_index=True)
                     veritabanini_kaydet(st.session_state.db); st.rerun()
+         
+        st.divider(); st.subheader(L["basliklar"]["aliskanlik"])
+    h_df = pd.DataFrame(u_info.get('habits', []), columns=["Alışkanlık", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"])
+    if h_df.empty: h_df = pd.DataFrame([{"Alışkanlık": "Kitap Okuma 📖", "Pzt": False, "Sal": False, "Çar": False, "Per": False, "Cum": False, "Cmt": False, "Paz": False}])
+    edited_h = st.data_editor(h_df, num_rows="dynamic", use_container_width=True, hide_index=True)
+    if not h_df.equals(edited_h):
+        u_info['habits'] = edited_h.to_dict(orient='records'); veritabanini_kaydet(st.session_state.db)
+    for _, row in edited_h.iterrows():
+        tik = sum([1 for gun in ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"] if row.get(gun, False) is True])
+        c_h1, c_h2 = st.columns([1, 3])
+        c_h1.caption(f"**{row['Alışkanlık']}**")
+        c_h2.progress(tik / 7)
 
 # --- ODAK ---
 elif menu in ["⏱️ Odak", "⏱️ Focus"]:
