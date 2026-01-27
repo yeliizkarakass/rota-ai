@@ -88,11 +88,12 @@ if st.session_state.aktif_kullanici is None:
     with t2:
         nu = st.text_input("Yeni Kullanıcı Adı")
         np = st.text_input("Şifre Belirle", type="password")
+        m = st.text_input("Meslek/Hedef", type ="Meslek")
         if st.button("HESAP OLUŞTUR"):
             if nu and np:
                 if nu not in st.session_state.db:
                     st.session_state.db[nu] = {
-                        'password': np, 'xp': 0, 'level': 1, 'ana_hedef': 'Mühendislik Öğrencisi', 
+                        'password': np, 'xp': 0, 'level': 1, 'ana_hedef': 'Meslek Öğrencisi', 
                         'data': pd.DataFrame(columns=['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan']), 
                         'dil': 'TR', 'tema_rengi': '#4FACFE', 'habits': [], 'notes': [], 
                         'mevcut_gno': 0.0, 'toplam_kredi': 0, 'pomo_count': 0, 'sinavlar': []
