@@ -154,8 +154,8 @@ st.sidebar.metric(L["labels"]["rutbe"], rütbe)
 st.sidebar.progress(min((u_info['xp'] % 500) / 500, 1.0), text=f"XP: {u_info['xp']}")
 menu = st.sidebar.radio("NAVİGASYON", L["menu"])
 
-# --- ÇIKIŞ BUTONU (GÜNCELLENDİ) ---
-if st.sidebar.button(L["butonlar"]["cikis"]):
+# Sidebar'daki çıkış butonu satırını bul ve sonuna key ekle:
+if st.sidebar.button(L["butonlar"]["cikis"], key="sidebar_logout_btn"):
     cookie_manager.delete("remember_rota_ai")
     st.session_state.aktif_kullanici = None
     st.rerun()
