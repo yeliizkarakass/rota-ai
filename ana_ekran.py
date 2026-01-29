@@ -1,12 +1,13 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import plotly.graph_objects as go
 import json
 import os
 import google.generativeai as genai
 import time
 import uuid
+import extra_streamlit_components as stx  # Yeni kütüphane
 
 # --- 0. AYARLAR ---
 st.set_page_config(page_title="ROTA AI", page_icon="🚀", layout="wide")
@@ -35,7 +36,7 @@ DIL_PAKETI = {
         "menu": ["🏠 Dashboard", "📅 Exams", "⏱️ Focus", "🎓 Academic", "🏆 Achievements", "🤖 AI Mentor", "⚙️ Settings"],
         "butonlar": {"baslat": "🚀 START", "durdur": "⏸️ PAUSE", "sifirla": "🔄 RESET", "ekle": "Add", "kaydet": "Save", "cikis": "🚪 LOGOUT"},
         "basliklar": {"takip": "📝 DAILY TRACKING", "onizleme": "🗓️ Weekly Preview", "sinavlar": "📅 EXAM SCHEDULE", "pomo": "⏱️ FOCUS", "akademik": "🎓 ACADEMIC MANAGEMENT", "aliskanlik": "📊 HABIT TRACKER", "basari": "🏆 HALL OF FAME", "mentor": "🤖 AI ACADEMIC ADVISOR"},
-        "labels": {"hedef": "Target", "yapilan": "Done", "birim": "Unit", "gorev": "Task", "rutbe": "Rank", "tema": "Quick Theme"}
+        "labels": {"hedef": "Target", "yapilan": "Done", "birim": "Unit", "gorev": "Task", "rank": "Rank", "tema": "Quick Theme"}
     }
 }
 
@@ -73,36 +74,157 @@ if 'pomo_calisiyor' not in st.session_state: st.session_state.pomo_calisiyor = F
 if 'son_guncelleme' not in st.session_state: st.session_state.son_guncelleme = time.time()
 if 'aktif_kullanici' not in st.session_state: st.session_state.aktif_kullanici = None
 
+# --- COOKIE YÖNETİMİ ---
+cookie_manager = stx.CookieManager()
+
 # --- GİRİŞ & KAYIT ---
 if st.session_state.aktif_kullanici is None:
+    # Önce Cookie'den kullanıcıyı kontrol et
+    saved_user = cookie_manager.get(cookie="remember_rota_ai")
+    
+    if saved_user and saved_user in st.session_state.db:
+        st.session_state.aktif_kullanici = saved_user
+        st.rerun()
+
     st.title("🚀 ROTA AI")
     t1, t2 = st.tabs(["🔑 GİRİŞ", "📝 KAYIT"])
+    
     with t1:
         u = st.text_input("Kullanıcı Adı")
         p = st.text_input("Şifre", type="password")
+        remember_me = st.checkbox("Beni Hatırla") 
+        
         if st.button("GİRİŞ YAP"):
             if u in st.session_state.db and st.session_state.db[u]['password'] == p:
                 st.session_state.aktif_kullanici = u
+                if remember_me:
+                    # Cookie'yi 30 gün boyunca hatırla
+                    cookie_manager.set("remember_rota_ai", u, expires_at=datetime.now() + timedelta(days=30))
                 st.rerun()
-            else: st.error("Kullanıcı adı veya şifre hatalı!")
+            else: 
+                st.error("Kullanıcı adı veya şifre hatalı!")
+                
     with t2:
         nu = st.text_input("Yeni Kullanıcı Adı")
         np = st.text_input("Şifre Belirle", type="password")
-        m = st.text_input("Meslek/Hedef", type ="Meslek")
+        c1, c2 = st.columns(2)
+        edu_level = c1.selectbox("Eğitim Seviyesi", ["Lise", "Önlisans", "Lisans", "Yüksek Lisans / Doktora"])
+        job_goal = c2.text_input("Meslek Hedefi (Örn: Elektrik Mühendisi)")
+        
         if st.button("HESAP OLUŞTUR"):
             if nu and np:
                 if nu not in st.session_state.db:
                     st.session_state.db[nu] = {
-                        'password': np, 'xp': 0, 'level': 1, 'ana_hedef': 'Meslek Öğrencisi', 
+                        'password': np, 'xp': 0, 'level': 1, 
+                        'ana_hedef': job_goal if job_goal else "Öğrenci", 
+                        'egitim_duzeyi': edu_level,
                         'data': pd.DataFrame(columns=['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan']), 
                         'dil': 'TR', 'tema_rengi': '#4FACFE', 'habits': [], 'notes': [], 
                         'mevcut_gno': 0.0, 'toplam_kredi': 0, 'pomo_count': 0, 'sinavlar': []
                     }
                     veritabanini_kaydet(st.session_state.db)
-                    st.success("Kayıt Başarılı!")
+                    st.success("Hesap oluşturuldu! Giriş yapabilirsiniz.")
                 else: st.warning("Bu kullanıcı adı alınmış.")
     st.stop()
 
+# --- ANA UYGULAMA DEĞİŞKENLERİ ---
+u_id = st.session_state.aktif_kullanici
+u_info = st.session_state.db[u_id]
+L = DIL_PAKETI.get(u_info.get('dil', 'TR'), DIL_PAKETI["TR"])
+TEMA = u_info.get('tema_rengi', '#4FACFE')
+
+# --- TASARIM (CSS) ---
+st.markdown(f"<style>.stButton>button {{ background-color: {TEMA}; color: white; border-radius:8px; font-weight: bold; }} h1, h2, h3 {{ color: {TEMA}; }} .stProgress > div > div > div > div {{ background-color: {TEMA}; }} [data-testid='stExpander'] {{ border: 1px solid {TEMA}; }} </style>", unsafe_allow_html=True)
+
+# --- SIDEBAR ---
+st.sidebar.title("🚀 ROTA AI")
+new_side_color = st.sidebar.color_picker(L["labels"]["tema"], TEMA)
+if new_side_color != TEMA:
+    u_info['tema_rengi'] = new_side_color
+    veritabanini_kaydet(st.session_state.db)
+    st.rerun()
+
+lvl = u_info['level']
+dil = u_info.get('dil', 'TR')
+rütbe = LAKAPLAR[1][dil]
+for k in sorted(LAKAPLAR.keys()):
+    if lvl >= k: rütbe = LAKAPLAR[k][dil]
+
+st.sidebar.metric(L["labels"]["rutbe"], rütbe)
+st.sidebar.progress(min((u_info['xp'] % 500) / 500, 1.0), text=f"XP: {u_info['xp']}")
+menu = st.sidebar.radio("NAVİGASYON", L["menu"])
+
+# --- ÇIKIŞ BUTONU (GÜNCELLENDİ) ---
+if st.sidebar.button(L["butonlar"]["cikis"]):
+    cookie_manager.delete("remember_rota_ai")
+    st.session_state.aktif_kullanici = None
+    st.rerun()
+
+# --- PANEL ---
+if menu in ["🏠 Panel", "🏠 Dashboard"]:
+    st.title(f"✨ {u_info.get('ana_hedef', 'Öğrenci').upper()}")
+    
+    if not isinstance(u_info['data'], pd.DataFrame) or u_info['data'].empty:
+        u_info['data'] = pd.DataFrame(columns=['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan'])
+    
+    required_columns = ['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan']
+    for col in required_columns:
+        if col not in u_info['data'].columns:
+            u_info['data'][col] = "" if col != 'Yapılan' else 0
+
+    if not u_info['data'].empty:
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            fig = go.Figure([go.Bar(x=u_info['data']['Görev'], y=u_info['data']['Hedef'], name="Hedef", marker_color='#E9ECEF'),
+                             go.Bar(x=u_info['data']['Görev'], y=u_info['data']['Yapılan'], name="Yapılan", marker_color=TEMA)])
+            fig.update_layout(height=300, barmode='group'); st.plotly_chart(fig, use_container_width=True)
+        with c2:
+            done = u_info['data']['Yapılan'].astype(float).sum()
+            todo = u_info['data']['Hedef'].astype(float).sum()
+            st.plotly_chart(go.Figure(go.Pie(labels=['Biten', 'Kalan'], values=[done, max(0.1, todo-done)], hole=.6, marker_colors=[TEMA, '#FF4B4B'])).update_layout(height=300, showlegend=False), use_container_width=True)
+
+    st.subheader(L["basliklar"]["takip"])
+    gunler = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
+    for g in gunler:
+        with st.expander(f"📅 {g.upper()}"):
+            temp_df = u_info['data'][u_info['data']['Gün'] == g]
+            for idx, row in temp_df.iterrows():
+                cc1, cc2, cc3 = st.columns([3, 2, 1])
+                cc1.write(f"**{row['Görev']}**")
+                y_v = cc2.number_input(f"{row['Birim']}", value=int(row['Yapılan']), key=f"p_{idx}")
+                if y_v != row['Yapılan']:
+                    u_info['data'].at[idx, 'Yapılan'] = y_v
+                    u_info['xp'] += 20
+                    veritabanini_kaydet(st.session_state.db)
+                    st.rerun()
+                if cc3.button("🗑️", key=f"del_g_{idx}"):
+                    u_info['data'] = u_info['data'].drop(idx).reset_index(drop=True)
+                    veritabanini_kaydet(st.session_state.db)
+                    st.rerun()
+            
+            with st.form(f"f_{g}", clear_on_submit=True):
+                c_a, c_b, c_c = st.columns([2, 1, 1])
+                ng = c_a.text_input("Görev")
+                nh = c_b.number_input("Hedef", min_value=1)
+                nb = c_c.selectbox("Birim", ["Soru", "Saat", "Konu"])
+                if st.form_submit_button("Ekle"):
+                    if ng:
+                        new_row = pd.DataFrame([{'Gün': g, 'Görev': ng, 'Hedef': nh, 'Birim': nb, 'Yapılan': 0}])
+                        u_info['data'] = pd.concat([u_info['data'], new_row], ignore_index=True)
+                        veritabanini_kaydet(st.session_state.db)
+                        st.rerun()
+
+# ... (Kodun geri kalan kısımları: Odak, Sınavlar, Akademik vb. değişmeden devam ediyor) ...
+# Not: Mesaj uzunluğu sınırından dolayı geri kalan aynı kısımları buraya eklemedim, 
+# ama kendi kodundaki elif/else bloklarını olduğu gibi bu yapının altına yapıştırabilirsin.
+Önemli Notlar:
+Gereksinimler: Eğer bu kodu Streamlit Cloud'da yayınlayacaksan, projenin ana klasöründeki requirements.txt dosyasına şu satırı eklemeyi unutma: extra-streamlit-components
+
+Otomatik Giriş: Tarayıcın çerezleri temizlemediği sürece 30 gün boyunca seni hatırlayacak.
+
+Çıkış: Sidebar'daki "Çıkış" butonuna bastığın an tarayıcıdaki hatırlama verisi silinir.
+
+Bu adımı tamamladıktan sonra, AI Mentor kısmında senin mühendislik projelerinle (örneğin Air Mouse veya RFID kilit sistemi) ilgili özel bir danışmanlık katmanı eklememi ister misin?
 u_id = st.session_state.aktif_kullanici
 u_info = st.session_state.db[u_id]
 L = DIL_PAKETI.get(u_info.get('dil', 'TR'), DIL_PAKETI["TR"])
