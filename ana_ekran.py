@@ -349,19 +349,58 @@ elif menu in ["⏱️ Odak", "⏱️ Focus"]:
 elif menu in ["📅 Sınavlar", "📅 Exams"]:
     st.title(L["basliklar"]["sinavlar"])
     if 'sinavlar' not in u_info: u_info['sinavlar'] = []
+    
+    # Yeni Sınav Ekleme Formu
     with st.form("ex_f", clear_on_submit=True):
         c1, c2 = st.columns(2)
-        d_ad, d_tr = c1.text_input("Ders Adı"), c2.date_input("Sınav Tarihi")
+        d_ad = c1.text_input("Ders Adı")
+        d_tr = c2.date_input("Sınav Tarihi")
+        
         if st.form_submit_button("Sınav Ekle"):
             if d_ad:
-                u_info['sinavlar'].append({"id": str(uuid.uuid4()), "ders": d_ad, "tarih": str(d_tr)})
-                veritabanini_kaydet(st.session_state.db); st.rerun()
+                u_info['sinavlar'].append({
+                    "id": str(uuid.uuid4()), 
+                    "ders": d_ad, 
+                    "tarih": str(d_tr)
+                })
+                veritabanini_kaydet(st.session_state.db)
+                st.rerun()
+
+    # Sınavları Listeleme
     for i, ex in enumerate(u_info['sinavlar']):
+        # Tarih ve Gün Hesaplamaları
+        sinav_tarihi = datetime.strptime(ex['tarih'], '%Y-%m-%d').date()
+        bugun = datetime.now().date()
+        kalan_gun = (sinav_tarihi - bugun).days
+        
+        # Gün ismini Türkçe bulma
+        gunler_tr = {
+            "Monday": "Pazartesi", "Tuesday": "Salı", "Wednesday": "Çarşamba",
+            "Thursday": "Perşembe", "Friday": "Cuma", "Saturday": "Cumartesi", "Sunday": "Pazar"
+        }
+        gun_adi = gunler_tr[sinav_tarihi.strftime('%A')]
+
         with st.container(border=True):
             sc1, sc2, sc3 = st.columns([3, 2, 1])
-            sc1.write(f"📖 **{ex['ders']}**"); sc2.info(f"📅 {ex['tarih']}")
-            if sc3.button("Sil", key=f"ex_s_{i}"):
-                u_info['sinavlar'].pop(i); veritabanini_kaydet(st.session_state.db); st.rerun()
+            sc1.markdown(f"### 📖 {ex['ders']}")
+            sc2.info(f"📅 {ex['tarih']} ({gun_adi})")
+            
+            if sc3.button("Sil", key=f"ex_s_{ex['id']}"):
+                u_info['sinavlar'].pop(i)
+                veritabanini_kaydet(st.session_state.db)
+                st.rerun()
+            
+            # --- DURUM MESAJLARI VE MOTİVASYON ---
+            if kalan_gun < 0:
+                st.error(f"⌛ Bu sınavın üzerinden {abs(kalan_gun)} gün geçmiş.")
+            elif kalan_gun == 0:
+                st.warning("🚨 DİKKAT: Sınav BUGÜN! Başarılar dilerim! 🔥")
+            elif kalan_gun <= 3:
+                st.warning(f"⚠️ Sınava sadece {kalan_gun} gün kaldı! Artık tempoyu artırıp son tekrarları yapmalısın. 🏃‍♂️")
+            elif kalan_gun <= 7:
+                st.info(f"🗓️ Sınava {kalan_gun} gün var. Konu eksiklerini kapatmak için hala vaktin var, planlı ilerle. 📚")
+            else:
+                st.success(f"✅ Sınava {kalan_gun} gün var. Rahat bir çalışma programıyla her şeyi yetiştirebilirsin. 😇")
 
 # --- AKADEMİK ---
 elif menu in ["🎓 Akademik", "🎓 Academic"]:
