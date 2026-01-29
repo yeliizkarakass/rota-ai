@@ -562,8 +562,3 @@ elif menu in ["⚙️ Ayarlar", "⚙️ Settings"]:
             u_info.update({'password': new_pass, 'ana_hedef': new_goal})
             veritabanini_kaydet(st.session_state.db)
             st.rerun()
-
-# --- ÇIKIŞ ---
-if st.sidebar.button(L["butonlar"]["cikis"]):
-    st.session_state.aktif_kullanici = None
-    st.rerun()
