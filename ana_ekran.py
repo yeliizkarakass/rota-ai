@@ -256,35 +256,63 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
 
     st.divider()
 
-    # --- ALIŞKANLIK TAKİPÇİSİ ---
     st.subheader(L["basliklar"]["aliskanlik"])
-    habits_data = u_info.get('habits', [])
-    h_df = pd.DataFrame(habits_data)
-    
-    if h_df.empty:
-        h_df = pd.DataFrame(columns=["Alışkanlık", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"])
 
-    # Veri Editörü: Kullanıcı buradan tik atar
-    edited_h = st.data_editor(h_df, num_rows="dynamic", use_container_width=True, hide_index=True, key="h_editor")
-    
-    if not h_df.equals(edited_h):
-        u_info['habits'] = edited_h.to_dict(orient='records')
-        veritabanini_kaydet(st.session_state.db)
-        st.rerun()
-    
-    # Yüzde Hesaplama ve İlerleme Çubukları
-    for _, row in edited_h.iterrows():
-        if row['Alışkanlık']:
-            # Sadece gün sütunlarındaki True değerlerini say
-            days_checked = sum([1 for day in ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"] if row.get(day) is True])
-            weekly_percent = int((days_checked / 7) * 100)
-            
-            ch1, ch2 = st.columns([1, 4])
-            ch1.markdown(f"<p style='font-size:14px; padding-top:10px;'>{row['Alışkanlık']}</p>", unsafe_allow_html=True)
-            # İlerleme çubuğunun rengini başarıya göre değiştiriyoruz
-            bar_color = TEMA if weekly_percent > 50 else "#FFBB00"
-            ch2.progress(days_checked / 7, text=f"Haftalık Performans: %{weekly_percent}")
+    # 1. YENİ ALIŞKANLIK EKLEME FORMU
+    with st.expander("➕ Yeni Alışkanlık Ekle"):
+        with st.form("habit_add_form", clear_on_submit=True):
+            new_h_name = st.text_input("Alışkanlık İsmi (Örn: Kitap Okuma)")
+            if st.form_submit_button("Listeye Ekle"):
+                if new_h_name:
+                    new_habit = {
+                        "Alışkanlık": new_h_name, 
+                        "Pzt": False, "Sal": False, "Çar": False, 
+                        "Per": False, "Cum": False, "Cmt": False, "Paz": False
+                    }
+                    u_info['habits'].append(new_habit)
+                    veritabanini_kaydet(st.session_state.db)
+                    st.rerun()
 
+    # 2. ALIŞKANLIK TABLOSU (TİK ATMA ALANI)
+    h_df = pd.DataFrame(u_info.get('habits', []))
+    
+    if not h_df.empty:
+        # Tabloda düzenleme yapıldığında (tik atıldığında) kaydet
+        edited_h = st.data_editor(
+            h_df, 
+            use_container_width=True, 
+            hide_index=True, 
+            key="habit_editor_main",
+            column_config={
+                "Alışkanlık": st.column_config.TextColumn("Alışkanlık", disabled=True),
+            }
+        )
+        
+        # Eğer tabloda bir değişiklik (tik) varsa veritabanına işle
+        if not h_df.equals(edited_h):
+            u_info['habits'] = edited_h.to_dict(orient='records')
+            veritabanini_kaydet(st.session_state.db)
+            st.rerun()
+
+        st.write("---")
+        # 3. YÜZDELİK BAŞARI GÖSTERİMİ
+        st.caption("🎯 Haftalık Alışkanlık Performansın")
+        for _, row in edited_h.iterrows():
+            if row['Alışkanlık']:
+                # Haftalık başarıyı hesapla
+                days = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]
+                done_days = sum([1 for d in days if row.get(d) is True])
+                percent = int((done_days / 7) * 100)
+                
+                # Görselleştirme
+                c_h1, c_h2 = st.columns([1, 4])
+                c_h1.markdown(f"**{row['Alışkanlık']}**")
+                
+                # Başarı rengine göre bar (Kırmızı -> Turuncu -> Yeşil)
+                color = "red" if percent < 30 else "orange" if percent < 70 else "green"
+                c_h2.progress(done_days / 7, text=f"%{percent} Tamamlandı")
+    else:
+        st.info("Henüz bir alışkanlık eklemedin. Yukarıdaki butonu kullanarak başlayabilirsin!")
 
 # --- ODAK ---
 elif menu in ["⏱️ Odak", "⏱️ Focus"]:
