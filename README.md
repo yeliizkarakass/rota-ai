@@ -25,11 +25,7 @@ veri yönetimi, state/session mantığı ve kullanıcı etkileşimini pekiştirm
 - Plotly
 - JSON
 
-## ▶️ Kurulum
-```bash
-pip install -r requirements.txt
-streamlit run app.py
----
+-----------------------------------------------------------------
 
 # 🚀 ROTA AI
 
@@ -58,7 +54,3 @@ to a real-world application, focusing on data management, state/session logic, a
 - Plotly  
 - JSON  
 
-## ▶️ Installation
-```bash
-pip install -r requirements.txt
-streamlit run app.py
