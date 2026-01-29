@@ -214,17 +214,6 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
                         veritabanini_kaydet(st.session_state.db)
                         st.rerun()
 
-# ... (Kodun geri kalan kısımları: Odak, Sınavlar, Akademik vb. değişmeden devam ediyor) ...
-# Not: Mesaj uzunluğu sınırından dolayı geri kalan aynı kısımları buraya eklemedim, 
-# ama kendi kodundaki elif/else bloklarını olduğu gibi bu yapının altına yapıştırabilirsin.
-Önemli Notlar:
-Gereksinimler: Eğer bu kodu Streamlit Cloud'da yayınlayacaksan, projenin ana klasöründeki requirements.txt dosyasına şu satırı eklemeyi unutma: extra-streamlit-components
-
-Otomatik Giriş: Tarayıcın çerezleri temizlemediği sürece 30 gün boyunca seni hatırlayacak.
-
-Çıkış: Sidebar'daki "Çıkış" butonuna bastığın an tarayıcıdaki hatırlama verisi silinir.
-
-Bu adımı tamamladıktan sonra, AI Mentor kısmında senin mühendislik projelerinle (örneğin Air Mouse veya RFID kilit sistemi) ilgili özel bir danışmanlık katmanı eklememi ister misin?
 u_id = st.session_state.aktif_kullanici
 u_info = st.session_state.db[u_id]
 L = DIL_PAKETI.get(u_info.get('dil', 'TR'), DIL_PAKETI["TR"])
