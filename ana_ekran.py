@@ -7,7 +7,7 @@ import os
 import google.generativeai as genai
 import time
 import uuid
-import extra_streamlit_components as stx  # Yeni kütüphane
+import extra_streamlit_components as stx  
 
 # --- 0. AYARLAR ---
 st.set_page_config(page_title="ROTA AI", page_icon="🚀", layout="wide")
@@ -79,7 +79,7 @@ cookie_manager = stx.CookieManager()
 
 # --- GİRİŞ & KAYIT ---
 if st.session_state.aktif_kullanici is None:
-    # Önce Cookie'den kullanıcıyı kontrol et
+    
     saved_user = cookie_manager.get(cookie="remember_rota_ai")
     
     if saved_user and saved_user in st.session_state.db:
@@ -98,7 +98,7 @@ if st.session_state.aktif_kullanici is None:
             if u in st.session_state.db and st.session_state.db[u]['password'] == p:
                 st.session_state.aktif_kullanici = u
                 if remember_me:
-                    # Cookie'yi 30 gün boyunca hatırla
+                    
                     cookie_manager.set("remember_rota_ai", u, expires_at=datetime.now() + timedelta(days=30))
                 st.rerun()
             else: 
@@ -154,7 +154,7 @@ st.sidebar.metric(L["labels"]["rutbe"], rütbe)
 st.sidebar.progress(min((u_info['xp'] % 500) / 500, 1.0), text=f"XP: {u_info['xp']}")
 menu = st.sidebar.radio("NAVİGASYON", L["menu"])
 
-# Sidebar'daki çıkış butonu satırını bul ve sonuna key ekle:
+
 if st.sidebar.button(L["butonlar"]["cikis"], key="sidebar_logout_btn"):
     cookie_manager.delete("remember_rota_ai")
     st.session_state.aktif_kullanici = None
@@ -164,7 +164,7 @@ if st.sidebar.button(L["butonlar"]["cikis"], key="sidebar_logout_btn"):
 if menu in ["🏠 Panel", "🏠 Dashboard"]:
     st.title(f"✨ {u_info.get('ana_hedef', 'Öğrenci').upper()}")
     
-    # Veritabanı Kontrolü ve Sütun Sabitleme
+    
     if not isinstance(u_info['data'], pd.DataFrame) or u_info['data'].empty:
         u_info['data'] = pd.DataFrame(columns=['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan'])
     
@@ -199,18 +199,18 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
             fig_pie.update_layout(height=300, showlegend=False, title=f"Genel Başarı: %{int(success_rate)}")
             st.plotly_chart(fig_pie, use_container_width=True)
 
-    # --- HAFTALIK ÖNİZLEME (YENİ EKLEME) ---
+    # --- HAFTALIK ÖNİZLEME  ---
     st.subheader("🗓️ HAFTALIK ÖNİZLEME")
     preview_cols = st.columns(7)
     gunler_liste = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
     
     for i, g in enumerate(gunler_liste):
         with preview_cols[i]:
-            st.caption(f"**{g[:3]}**") # Günün ilk 3 harfi (Paz, Sal...)
+            st.caption(f"**{g[:3]}**") 
             day_tasks = u_info['data'][u_info['data']['Gün'] == g]
             if not day_tasks.empty:
                 for _, t in day_tasks.iterrows():
-                    # Görev yapıldıysa üstünü çiz veya ikon ekle
+                    
                     status_icon = "✅" if t['Yapılan'] >= t['Hedef'] else "⏳"
                     st.markdown(f"<p style='font-size:11px; margin-bottom:2px;'>{status_icon} {t['Görev']}</p>", unsafe_allow_html=True)
             else:
@@ -227,12 +227,12 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
             for idx, row in temp_df.iterrows():
                 cc1, cc2, cc3 = st.columns([3, 2, 1])
                 cc1.write(f"**{row['Görev']}**")
-                # Kullanıcı burada yaptığı miktarı günceller
+                
                 y_v = cc2.number_input(f"{row['Birim']}", value=int(row['Yapılan']), key=f"inp_{idx}", min_value=0)
                 
                 if y_v != row['Yapılan']:
                     u_info['data'].at[idx, 'Yapılan'] = y_v
-                    u_info['xp'] += 10 # Her güncellemede küçük XP ödülü
+                    u_info['xp'] += 10 
                     veritabanini_kaydet(st.session_state.db)
                     st.rerun()
                 
@@ -263,9 +263,9 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
             new_h_name = st.text_input("Alışkanlık İsmi (Örn: Kitap Okuma)")
             if st.form_submit_button("Listeye Ekle"):
                 if new_h_name:
-                    # Yeni alışkanlığı temiz bir sözlük yapısıyla ekle
+                    
                     new_habit = {
-                        "id": str(uuid.uuid4()), # Silme işlemi için benzersiz kimlik
+                        "id": str(uuid.uuid4()), 
                         "Alışkanlık": new_h_name, 
                         "Pzt": False, "Sal": False, "Çar": False, 
                         "Per": False, "Cum": False, "Cmt": False, "Paz": False
@@ -279,7 +279,7 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
     if 'habits' in u_info and u_info['habits']:
         days = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]
         
-        # Her alışkanlık için bir satır oluştur
+        
         for h_idx, habit in enumerate(u_info['habits']):
             with st.container(border=True):
                 # Başlık ve Silme Butonu
@@ -295,16 +295,16 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
                 check_cols = st.columns(7)
                 done_count = 0
                 for d_idx, day in enumerate(days):
-                    # Checkbox değerini güvenli bir şekilde al
+                    
                     current_val = bool(habit.get(day, False))
                     if check_cols[d_idx].checkbox(day, value=current_val, key=f"chk_{habit.get('id', h_idx)}_{day}"):
-                        if not current_val: # Eğer değer değiştiyse
+                        if not current_val: 
                             u_info['habits'][h_idx][day] = True
                             veritabanini_kaydet(st.session_state.db)
                             st.rerun()
                         done_count += 1
                     else:
-                        if current_val: # Eğer işaret kaldırıldıysa
+                        if current_val: 
                             u_info['habits'][h_idx][day] = False
                             veritabanini_kaydet(st.session_state.db)
                             st.rerun()
@@ -480,7 +480,7 @@ elif menu in ["🎓 Akademik", "🎓 Academic"]:
             if yeni_gno >= 3.0: st.balloons()
 
     with tab2:
-        # Devamsızlık Takibi (Değişmedi, orijinal kodun)
+        # Devamsızlık Takibi 
         st.subheader("📉 Devamsızlık Takibi")
         with st.expander("➕ Yeni Ders Ekle"):
             with st.form("yeni_ders_form", clear_on_submit=True):
