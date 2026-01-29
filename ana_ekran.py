@@ -255,7 +255,6 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
                         st.rerun()
 
     st.divider()
-
     st.subheader(L["basliklar"]["aliskanlik"])
 
     # 1. YENİ ALIŞKANLIK EKLEME FORMU
@@ -264,53 +263,55 @@ if menu in ["🏠 Panel", "🏠 Dashboard"]:
             new_h_name = st.text_input("Alışkanlık İsmi (Örn: Kitap Okuma)")
             if st.form_submit_button("Listeye Ekle"):
                 if new_h_name:
+                    # Yeni alışkanlığı temiz bir sözlük yapısıyla ekle
                     new_habit = {
+                        "id": str(uuid.uuid4()), # Silme işlemi için benzersiz kimlik
                         "Alışkanlık": new_h_name, 
                         "Pzt": False, "Sal": False, "Çar": False, 
                         "Per": False, "Cum": False, "Cmt": False, "Paz": False
                     }
+                    if 'habits' not in u_info: u_info['habits'] = []
                     u_info['habits'].append(new_habit)
                     veritabanini_kaydet(st.session_state.db)
                     st.rerun()
 
-    # 2. ALIŞKANLIK TABLOSU (TİK ATMA ALANI)
-    h_df = pd.DataFrame(u_info.get('habits', []))
-    
-    if not h_df.empty:
-        # Tabloda düzenleme yapıldığında (tik atıldığında) kaydet
-        edited_h = st.data_editor(
-            h_df, 
-            use_container_width=True, 
-            hide_index=True, 
-            key="habit_editor_main",
-            column_config={
-                "Alışkanlık": st.column_config.TextColumn("Alışkanlık", disabled=True),
-            }
-        )
+    # 2. ALIŞKANLIKLARI LİSTELEME VE GÜNCELLEME
+    if 'habits' in u_info and u_info['habits']:
+        days = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]
         
-        # Eğer tabloda bir değişiklik (tik) varsa veritabanına işle
-        if not h_df.equals(edited_h):
-            u_info['habits'] = edited_h.to_dict(orient='records')
-            veritabanini_kaydet(st.session_state.db)
-            st.rerun()
-
-        st.write("---")
-        # 3. YÜZDELİK BAŞARI GÖSTERİMİ
-        st.caption("🎯 Haftalık Alışkanlık Performansın")
-        for _, row in edited_h.iterrows():
-            if row['Alışkanlık']:
-                # Haftalık başarıyı hesapla
-                days = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]
-                done_days = sum([1 for d in days if row.get(d) is True])
-                percent = int((done_days / 7) * 100)
+        # Her alışkanlık için bir satır oluştur
+        for h_idx, habit in enumerate(u_info['habits']):
+            with st.container(border=True):
+                # Başlık ve Silme Butonu
+                header_col, delete_col = st.columns([5, 1])
+                header_col.markdown(f"### {habit['Alışkanlık']}")
                 
-                # Görselleştirme
-                c_h1, c_h2 = st.columns([1, 4])
-                c_h1.markdown(f"**{row['Alışkanlık']}**")
+                if delete_col.button("🗑️", key=f"del_h_{habit.get('id', h_idx)}"):
+                    u_info['habits'].pop(h_idx)
+                    veritabanini_kaydet(st.session_state.db)
+                    st.rerun()
                 
-                # Başarı rengine göre bar (Kırmızı -> Turuncu -> Yeşil)
-                color = "red" if percent < 30 else "orange" if percent < 70 else "green"
-                c_h2.progress(done_days / 7, text=f"%{percent} Tamamlandı")
+                # Günlük Tikler
+                check_cols = st.columns(7)
+                done_count = 0
+                for d_idx, day in enumerate(days):
+                    # Checkbox değerini güvenli bir şekilde al
+                    current_val = bool(habit.get(day, False))
+                    if check_cols[d_idx].checkbox(day, value=current_val, key=f"chk_{habit.get('id', h_idx)}_{day}"):
+                        if not current_val: # Eğer değer değiştiyse
+                            u_info['habits'][h_idx][day] = True
+                            veritabanini_kaydet(st.session_state.db)
+                            st.rerun()
+                        done_count += 1
+                    else:
+                        if current_val: # Eğer işaret kaldırıldıysa
+                            u_info['habits'][h_idx][day] = False
+                            veritabanini_kaydet(st.session_state.db)
+                            st.rerun()
+                
+                # Yüzdelik İlerleme Barı
+                percent = int((done_count / 7) * 100)
+                st.progress(done_count / 7, text=f"Haftalık Performans: %{percent}")
     else:
         st.info("Henüz bir alışkanlık eklemedin. Yukarıdaki butonu kullanarak başlayabilirsin!")
 
