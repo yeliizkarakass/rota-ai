@@ -164,154 +164,126 @@ if st.sidebar.button(L["butonlar"]["cikis"]):
 if menu in ["🏠 Panel", "🏠 Dashboard"]:
     st.title(f"✨ {u_info.get('ana_hedef', 'Öğrenci').upper()}")
     
+    # Veritabanı Kontrolü ve Sütun Sabitleme
     if not isinstance(u_info['data'], pd.DataFrame) or u_info['data'].empty:
         u_info['data'] = pd.DataFrame(columns=['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan'])
     
-    required_columns = ['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan']
-    for col in required_columns:
+    for col in ['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan']:
         if col not in u_info['data'].columns:
             u_info['data'][col] = "" if col != 'Yapılan' else 0
 
+    # --- ÜST GRAFİKLER (BAŞARI ANALİZİ) ---
     if not u_info['data'].empty:
         c1, c2 = st.columns([2, 1])
         with c1:
-            fig = go.Figure([go.Bar(x=u_info['data']['Görev'], y=u_info['data']['Hedef'], name="Hedef", marker_color='#E9ECEF'),
-                             go.Bar(x=u_info['data']['Görev'], y=u_info['data']['Yapılan'], name="Yapılan", marker_color=TEMA)])
-            fig.update_layout(height=300, barmode='group'); st.plotly_chart(fig, use_container_width=True)
+            # Görev bazlı kıyaslama grafiği
+            fig = go.Figure([
+                go.Bar(x=u_info['data']['Görev'], y=u_info['data']['Hedef'], name="Hedef", marker_color='#E9ECEF'),
+                go.Bar(x=u_info['data']['Görev'], y=u_info['data']['Yapılan'], name="Yapılan", marker_color=TEMA)
+            ])
+            fig.update_layout(height=300, barmode='group', title="Görev Kıyaslama", margin=dict(l=20, r=20, t=40, b=20))
+            st.plotly_chart(fig, use_container_width=True)
+        
         with c2:
-            done = u_info['data']['Yapılan'].astype(float).sum()
-            todo = u_info['data']['Hedef'].astype(float).sum()
-            st.plotly_chart(go.Figure(go.Pie(labels=['Biten', 'Kalan'], values=[done, max(0.1, todo-done)], hole=.6, marker_colors=[TEMA, '#FF4B4B'])).update_layout(height=300, showlegend=False), use_container_width=True)
-
-    st.subheader(L["basliklar"]["takip"])
-    gunler = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
-    for g in gunler:
-        with st.expander(f"📅 {g.upper()}"):
-            temp_df = u_info['data'][u_info['data']['Gün'] == g]
-            for idx, row in temp_df.iterrows():
-                cc1, cc2, cc3 = st.columns([3, 2, 1])
-                cc1.write(f"**{row['Görev']}**")
-                y_v = cc2.number_input(f"{row['Birim']}", value=int(row['Yapılan']), key=f"p_{idx}")
-                if y_v != row['Yapılan']:
-                    u_info['data'].at[idx, 'Yapılan'] = y_v
-                    u_info['xp'] += 20
-                    veritabanini_kaydet(st.session_state.db)
-                    st.rerun()
-                if cc3.button("🗑️", key=f"del_g_{idx}"):
-                    u_info['data'] = u_info['data'].drop(idx).reset_index(drop=True)
-                    veritabanini_kaydet(st.session_state.db)
-                    st.rerun()
+            # Genel doluluk oranı (Pasta Grafik)
+            done_total = u_info['data']['Yapılan'].astype(float).sum()
+            todo_total = u_info['data']['Hedef'].astype(float).sum()
+            success_rate = (done_total / todo_total * 100) if todo_total > 0 else 0
             
-            with st.form(f"f_{g}", clear_on_submit=True):
-                c_a, c_b, c_c = st.columns([2, 1, 1])
-                ng = c_a.text_input("Görev")
-                nh = c_b.number_input("Hedef", min_value=1)
-                nb = c_c.selectbox("Birim", ["Soru", "Saat", "Konu"])
-                if st.form_submit_button("Ekle"):
-                    if ng:
-                        new_row = pd.DataFrame([{'Gün': g, 'Görev': ng, 'Hedef': nh, 'Birim': nb, 'Yapılan': 0}])
-                        u_info['data'] = pd.concat([u_info['data'], new_row], ignore_index=True)
-                        veritabanini_kaydet(st.session_state.db)
-                        st.rerun()
+            fig_pie = go.Figure(go.Pie(
+                labels=['Tamamlanan', 'Kalan'], 
+                values=[done_total, max(0, todo_total - done_total)], 
+                hole=.6, 
+                marker_colors=[TEMA, '#FF4B4B']
+            ))
+            fig_pie.update_layout(height=300, showlegend=False, title=f"Genel Başarı: %{int(success_rate)}")
+            st.plotly_chart(fig_pie, use_container_width=True)
 
-u_id = st.session_state.aktif_kullanici
-u_info = st.session_state.db[u_id]
-L = DIL_PAKETI.get(u_info.get('dil', 'TR'), DIL_PAKETI["TR"])
-TEMA = u_info.get('tema_rengi', '#4FACFE')
-
-st.markdown(f"<style>.stButton>button {{ background-color: {TEMA}; color: white; border-radius:8px; font-weight: bold; }} h1, h2, h3 {{ color: {TEMA}; }} .stProgress > div > div > div > div {{ background-color: {TEMA}; }} [data-testid='stExpander'] {{ border: 1px solid {TEMA}; }} </style>", unsafe_allow_html=True)
-
-# --- SIDEBAR ---
-st.sidebar.title("🚀 ROTA AI")
-new_side_color = st.sidebar.color_picker(L["labels"]["tema"], TEMA)
-if new_side_color != TEMA:
-    u_info['tema_rengi'] = new_side_color
-    veritabanini_kaydet(st.session_state.db)
-    st.rerun()
-
-lvl = u_info['level']
-dil = u_info.get('dil', 'TR')
-rütbe = LAKAPLAR[1][dil]
-for k in sorted(LAKAPLAR.keys()):
-    if lvl >= k: rütbe = LAKAPLAR[k][dil]
-
-st.sidebar.metric(L["labels"]["rutbe"], rütbe)
-st.sidebar.progress(min((u_info['xp'] % 500) / 500, 1.0), text=f"XP: {u_info['xp']}")
-menu = st.sidebar.radio("NAVİGASYON", L["menu"])
-
-# --- PANEL ---
-if menu in ["🏠 Panel", "🏠 Dashboard"]:
-    st.title(f"✨ {u_info.get('ana_hedef', 'Öğrenci').upper()}")
+    # --- HAFTALIK ÖNİZLEME (YENİ EKLEME) ---
+    st.subheader("🗓️ HAFTALIK ÖNİZLEME")
+    preview_cols = st.columns(7)
+    gunler_liste = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
     
-    # HATA ÖNLEYİCİ: Eğer data boşsa veya sütunlar eksikse düzelt
-    if not isinstance(u_info['data'], pd.DataFrame) or u_info['data'].empty:
-        u_info['data'] = pd.DataFrame(columns=['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan'])
-    
-    # Sütun kontrolü yap (KeyError'u engelleyen kısım)
-    required_columns = ['Gün', 'Görev', 'Hedef', 'Birim', 'Yapılan']
-    for col in required_columns:
-        if col not in u_info['data'].columns:
-            u_info['data'][col] = "" if col != 'Yapılan' else 0
+    for i, g in enumerate(gunler_liste):
+        with preview_cols[i]:
+            st.caption(f"**{g[:3]}**") # Günün ilk 3 harfi (Paz, Sal...)
+            day_tasks = u_info['data'][u_info['data']['Gün'] == g]
+            if not day_tasks.empty:
+                for _, t in day_tasks.iterrows():
+                    # Görev yapıldıysa üstünü çiz veya ikon ekle
+                    status_icon = "✅" if t['Yapılan'] >= t['Hedef'] else "⏳"
+                    st.markdown(f"<p style='font-size:11px; margin-bottom:2px;'>{status_icon} {t['Görev']}</p>", unsafe_allow_html=True)
+            else:
+                st.markdown("<p style='font-size:10px; color:gray;'>Plan yok</p>", unsafe_allow_html=True)
 
-    if not u_info['data'].empty:
-        c1, c2 = st.columns([2, 1])
-        with c1:
-            fig = go.Figure([go.Bar(x=u_info['data']['Görev'], y=u_info['data']['Hedef'], name="Hedef", marker_color='#E9ECEF'),
-                             go.Bar(x=u_info['data']['Görev'], y=u_info['data']['Yapılan'], name="Yapılan", marker_color=TEMA)])
-            fig.update_layout(height=300, barmode='group'); st.plotly_chart(fig, use_container_width=True)
-        with c2:
-            done = u_info['data']['Yapılan'].astype(float).sum()
-            todo = u_info['data']['Hedef'].astype(float).sum()
-            st.plotly_chart(go.Figure(go.Pie(labels=['Biten', 'Kalan'], values=[done, max(0.1, todo-done)], hole=.6, marker_colors=[TEMA, '#FF4B4B'])).update_layout(height=300, showlegend=False), use_container_width=True)
+    st.divider()
 
+    # --- GÜNLÜK TAKİP VE VERİ GİRİŞİ ---
     st.subheader(L["basliklar"]["takip"])
-    gunler = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
-    for g in gunler:
+    for g in gunler_liste:
         with st.expander(f"📅 {g.upper()}"):
-            # Maskeleme yaparken KeyError almamak için güvenli filtreleme
             temp_df = u_info['data'][u_info['data']['Gün'] == g]
             
             for idx, row in temp_df.iterrows():
                 cc1, cc2, cc3 = st.columns([3, 2, 1])
                 cc1.write(f"**{row['Görev']}**")
-                y_v = cc2.number_input(f"{row['Birim']}", value=int(row['Yapılan']), key=f"p_{idx}")
+                # Kullanıcı burada yaptığı miktarı günceller
+                y_v = cc2.number_input(f"{row['Birim']}", value=int(row['Yapılan']), key=f"inp_{idx}", min_value=0)
+                
                 if y_v != row['Yapılan']:
                     u_info['data'].at[idx, 'Yapılan'] = y_v
-                    u_info['xp'] += 20
+                    u_info['xp'] += 10 # Her güncellemede küçük XP ödülü
                     veritabanini_kaydet(st.session_state.db)
                     st.rerun()
-                if cc3.button("🗑️", key=f"del_g_{idx}"):
+                
+                if cc3.button("🗑️", key=f"del_{idx}"):
                     u_info['data'] = u_info['data'].drop(idx).reset_index(drop=True)
                     veritabanini_kaydet(st.session_state.db)
                     st.rerun()
             
-            with st.form(f"f_{g}", clear_on_submit=True):
-                c_a, c_b, c_c = st.columns([2, 1, 1])
-                ng = c_a.text_input("Görev")
-                nh = c_b.number_input("Hedef", min_value=1)
-                nb = c_c.selectbox("Birim", ["Soru", "Saat", "Konu"])
-                if st.form_submit_button("Ekle"):
-                    if ng:
-                        new_row = pd.DataFrame([{'Gün': g, 'Görev': ng, 'Hedef': nh, 'Birim': nb, 'Yapılan': 0}])
+            # Yeni Görev Ekleme Formu
+            with st.form(f"form_add_{g}", clear_on_submit=True):
+                ca, cb, cc = st.columns([2, 1, 1])
+                new_task = ca.text_input("Görev Adı")
+                new_target = cb.number_input("Hedef Miktar", min_value=1, value=1)
+                new_unit = cc.selectbox("Birim", ["Soru", "Saat", "Konu", "Sayfa"])
+                if st.form_submit_button("Listeye Ekle"):
+                    if new_task:
+                        new_row = pd.DataFrame([{'Gün': g, 'Görev': new_task, 'Hedef': new_target, 'Birim': new_unit, 'Yapılan': 0}])
                         u_info['data'] = pd.concat([u_info['data'], new_row], ignore_index=True)
                         veritabanini_kaydet(st.session_state.db)
                         st.rerun()
 
     st.divider()
+
+    # --- ALIŞKANLIK TAKİPÇİSİ ---
     st.subheader(L["basliklar"]["aliskanlik"])
-    h_df = pd.DataFrame(u_info.get('habits', []), columns=["Alışkanlık", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"])
-    if h_df.empty: 
-        h_df = pd.DataFrame([{"Alışkanlık": "Kitap Okuma 📖", "Pzt": False, "Sal": False, "Çar": False, "Per": False, "Cum": False, "Cmt": False, "Paz": False}])
-    edited_h = st.data_editor(h_df, num_rows="dynamic", use_container_width=True, hide_index=True, key="habit_editor")
+    habits_data = u_info.get('habits', [])
+    h_df = pd.DataFrame(habits_data)
+    
+    if h_df.empty:
+        h_df = pd.DataFrame(columns=["Alışkanlık", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"])
+
+    # Veri Editörü: Kullanıcı buradan tik atar
+    edited_h = st.data_editor(h_df, num_rows="dynamic", use_container_width=True, hide_index=True, key="h_editor")
+    
     if not h_df.equals(edited_h):
         u_info['habits'] = edited_h.to_dict(orient='records')
         veritabanini_kaydet(st.session_state.db)
+        st.rerun()
     
+    # Yüzde Hesaplama ve İlerleme Çubukları
     for _, row in edited_h.iterrows():
-        tik = sum([1 for gun in ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"] if row.get(gun, False) is True])
-        c_h1, c_h2 = st.columns([1, 3])
-        c_h1.caption(f"**{row['Alışkanlık']}**")
-        c_h2.progress(tik / 7, text=f"%{int((tik/7)*100)}")
+        if row['Alışkanlık']:
+            # Sadece gün sütunlarındaki True değerlerini say
+            days_checked = sum([1 for day in ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"] if row.get(day) is True])
+            weekly_percent = int((days_checked / 7) * 100)
+            
+            ch1, ch2 = st.columns([1, 4])
+            ch1.markdown(f"<p style='font-size:14px; padding-top:10px;'>{row['Alışkanlık']}</p>", unsafe_allow_html=True)
+            # İlerleme çubuğunun rengini başarıya göre değiştiriyoruz
+            bar_color = TEMA if weekly_percent > 50 else "#FFBB00"
+            ch2.progress(days_checked / 7, text=f"Haftalık Performans: %{weekly_percent}")
 
 
 # --- ODAK ---
